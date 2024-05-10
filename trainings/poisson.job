@@ -1,0 +1,54 @@
+#!/bin/bash
+  
+#SBATCH --job-name=poisson
+#SBATCH --output=outputs/poisson.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+## LastFM
+
+for split in {1..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_largecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/lastfm_largecal' --save-check-dir 'checkpoints/full/lastfm_largecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+: "
+## MOOC
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/mooc' --save-check-dir 'checkpoints/full/mooc' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 32 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+## Reddit 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/reddit' --save-check-dir 'checkpoints/full/reddit' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+## Stack 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/stack_overflow' --save-check-dir 'checkpoints/full/stack_overflow' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 

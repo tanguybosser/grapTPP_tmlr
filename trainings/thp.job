@@ -1,0 +1,139 @@
+#!/bin/bash
+  
+#SBATCH --job-name=thp
+#SBATCH --output=outputs/thp.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+##LastFM
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/lastfm' --save-check-dir 'checkpoints/full/lastfm' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 2 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 8 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 10
+done
+
+: "
+##MOOC
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/mooc' --save-check-dir 'checkpoints/full/mooc' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 32 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 16 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 50
+done
+"
+
+: "
+##Github
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'github' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/github' --save-check-dir 'checkpoints/full/github' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 16 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 50
+done
+"
+
+##Reddit
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/reddit' --save-check-dir 'checkpoints/full/reddit' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 2 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 8 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 10
+done
+
+: "
+##Retweets
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'retweets' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/retweets' --save-check-dir 'checkpoints/full/retweets' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 16 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 50
+done
+"
+
+##Stack
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/stack_overflow' --save-check-dir 'checkpoints/full/stack_overflow' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 16 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 50
+done
+
+: "
+##Hawkes
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/hawkes_exponential_mutual' --save-check-dir 'checkpoints/full/hawkes_exponential_mutual' \
+--eval-metrics True --include-poisson True --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 16 \
+--decoder-hist-time-grouping 'concatenation' \
+--decoder-mc-prop-est 50
+done
+"
+
+
+
+

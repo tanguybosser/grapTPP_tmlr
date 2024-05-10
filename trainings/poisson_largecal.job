@@ -1,0 +1,54 @@
+#!/bin/bash
+  
+#SBATCH --job-name=poisson_large
+#SBATCH --output=outputs/poisson_large.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+## LastFM
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_largecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/lastfm_largecal' --save-check-dir 'checkpoints/neurips/lastfm_largecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+: "
+## MOOC
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_largecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/mooc_largecal' --save-check-dir 'checkpoints/neurips/mooc_largecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 32 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+## Reddit 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_largecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/reddit_largecal' --save-check-dir 'checkpoints/neurips/reddit_largecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 
+
+## Stack 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_largecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/stack_overflow_largecal' --save-check-dir 'checkpoints/neurips/stack_overflow_largecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'identity' --encoder-encoding 'times_only' \
+--decoder 'poisson' --decoder-encoding 'times_only'
+done 

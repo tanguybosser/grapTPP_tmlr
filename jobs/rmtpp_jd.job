@@ -1,0 +1,126 @@
+#!/bin/bash
+  
+#SBATCH --job-name=rmtpp_jd
+#SBATCH --output=neurips_output/rmtpp_jd_cos.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+#LastFM# 
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/lastfm_filtered' --save-check-dir 'checkpoints/neurips/lastfm_filtered' \
+--eval-metrics True --include-poisson False --patience 20 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+: "
+#MOOC#
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/mooc_filtered' --save-check-dir 'checkpoints/neurips/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+##Github##
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'github_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/github_filtered' --save-check-dir 'checkpoints/neurips/github_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+##Reddit##
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/reddit_filtered_short' --save-check-dir 'checkpoints/neurips/reddit_filtered_short' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+
+##Retweets##
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'retweets_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/retweets_filtered_short' --save-check-dir 'checkpoints/neurips/retweets_filtered_short' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+
+##Stack Overflow##
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/stack_overflow_filtered' --save-check-dir 'checkpoints/neurips/stack_overflow_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+
+
+##Hawkes
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/neurips/hawkes_exponential_mutual' --save-check-dir 'checkpoints/neurips/hawkes_exponential_mutual' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--train-epochs 20
+done
+"

@@ -1,0 +1,45 @@
+#!/bin/bash
+  
+#SBATCH --job-name=clnm_superlargecal
+#SBATCH --output=outputs/clnm_superlargecal.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+## LastFM_superlargecal
+### CLNM
+
+for split in {0..4}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/lastfm_superlargecal' --save-check-dir 'checkpoints/full/lastfm_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'cond-log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 \
+--decoder-encoding 'log_times_only' \
+--decoder-hist-time-grouping 'concatenation'
+done 
+
+
+### CLN
+
+for split in {0..4}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/full/lastfm_superlargecal' --save-check-dir 'checkpoints/full/lastfm_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'cond-log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 1 \
+--decoder-encoding 'log_times_only' \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'nomix'
+done 

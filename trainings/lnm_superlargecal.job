@@ -1,0 +1,73 @@
+#!/bin/bash
+  
+#SBATCH --job-name=lnm_superlarge
+#SBATCH --output=outputs/lnm_superlarge.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+## LastFM 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/lastfm_superlargecal' --save-check-dir 'checkpoints/neurips/lastfm_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 
+done 
+
+: "
+## MOOC 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/mooc_superlargecal' --save-check-dir 'checkpoints/neurips/mooc_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 32 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 
+done 
+
+
+## Reddit
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/reddit_superlargecal' --save-check-dir 'checkpoints/neurips/reddit_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 10 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 
+done 
+
+
+## Stack 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_superlargecal' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/stack_overflow_superlargecal' --save-check-dir 'checkpoints/neurips/stack_overflow_superlargecal' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 16 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 
+done 
+
+"

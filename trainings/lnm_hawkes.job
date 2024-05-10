@@ -1,0 +1,24 @@
+#!/bin/bash
+  
+#SBATCH --job-name=lnm_hawkes
+#SBATCH --output=outputs/lnm_hawkes.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+## LastFM 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/neurips/hawkes_exponential_mutual' --save-check-dir 'checkpoints/neurips/hawkes_exponential_mutual' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'log-normal-mixture' \
+--decoder-units-mlp 16 --decoder-units-mlp 16 \
+--decoder-n-mixture 32 
+done 

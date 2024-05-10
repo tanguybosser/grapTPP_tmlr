@@ -1,0 +1,157 @@
+#!/bin/bash
+  
+#SBATCH --job-name=rmtpp_dd_hawkes
+#SBATCH --output=work_outputs/param.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+#LastFM#
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/lastfm_filtered' --save-check-dir 'checkpoints/icml/lastfm_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 27 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 32 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+: "
+#MOOC#
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+##Github##
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'github_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/github_filtered' --save-check-dir 'checkpoints/icml/github_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+##Reddit##
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/reddit_filtered_short' --save-check-dir 'checkpoints/icml/reddit_filtered_short' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+
+##Retweets##
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'retweets_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/retweets_filtered_short' --save-check-dir 'checkpoints/icml/retweets_filtered_short' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+##Stack Overflow##
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/stack_overflow_filtered' --save-check-dir 'checkpoints/icml/stack_overflow_filtered' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+
+
+##Hawkes
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/icml/hawkes_exponential_mutual' --save-check-dir 'checkpoints/icml/hawkes_exponential_mutual' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
+"
+
+##Hawkes - Large 
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual_large' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/icml/hawkes_exponential_mutual_large' --save-check-dir 'checkpoints/icml/hawkes_exponential_mutual_large' \
+--eval-metrics True --include-poisson False --patience 20 --train-epochs 1001 --batch-size 16 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-dd' \
+--decoder-units-mlp 16 \
+--separate-training True \
+--decoder-hist-time-grouping 'concatenation' \
+--exp-name 'separate'
+done
