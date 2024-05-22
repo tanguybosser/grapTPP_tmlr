@@ -1,67 +1,67 @@
 def get_acronym(models):
     
     models_thp = {
-        'gru_thp_temporal_with_labels_adjust_param': 'THP',
-        'gru_thp-jd_temporal_with_labels_adjust_param': 'THP-JD',
-        'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd_separate': 'THP-DD',
+        'gru_thp_temporal_with_labels': 'THP',
+        'gru_thp-jd_temporal_with_labels': 'THP+',
+        'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd': 'THP++',
     }
 
     models_sa_thp = {
-        'selfattention_thp_temporal_with_labels_adjust_param': 'SA-THP',
-        'selfattention_thp-jd_temporal_with_labels_adjust_param': 'SA-THP-JD',
-        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_thp-dd_separate': 'SA-THP-DD',
+        'selfattention_thp_temporal_with_labels': 'SA-THP',
+        'selfattention_thp-jd_temporal_with_labels': 'SA-THP-JD',
+        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_thp-dd': 'SA-THP-DD',
     }
 
     models_sahp = {
-        'gru_sahp_temporal_with_labels_adjust_param': 'SAHP',
-        'gru_sahp-jd_temporal_with_labels_adjust_param': 'SAHP-JD',
-        'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd_separate': 'SAHP-DD'
+        'gru_sahp_temporal_with_labels': 'SAHP',
+        'gru_sahp-jd_temporal_with_labels': 'SAHP+',
+        'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd': 'SAHP++'
     }
     
     models_sa_sahp = {
-        'selfattention_sahp_temporal_with_labels_adjust_param': 'SA-SAHP',
-        'selfattention_sahp-jd_temporal_with_labels_adjust_param': 'SA-SAHP-JD',
-        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_sahp-dd_separate': 'SA-SAHP-DD'
+        'selfattention_sahp_temporal_with_labels': 'SA-SAHP',
+        'selfattention_sahp-jd_temporal_with_labels': 'SA-SAHP-JD',
+        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_sahp-dd': 'SA-SAHP-DD'
     }
 
     models_fnn = {
-        'poisson_gru_mlp-cm_temporal_with_labels_adjust_param':'FNN',
-        'poisson_gru_mlp-cm-jd_temporal_with_labels_adjust_param':'FNN-JD',
-        'poisson_gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd_separate':'FNN-DD'
+        'gru_mlp-cm_temporal_with_labels':'FNN',
+        'gru_mlp-cm-jd_temporal_with_labels':'FNN+',
+        'gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd':'FNN++'
     }
 
     models_sa_fnn = {
-        'poisson_selfattention_mlp-cm_temporal_with_labels_adjust_param':'SA-FNN',
-        'poisson_selfattention_mlp-cm-jd_temporal_with_labels_adjust_param':'SA-FNN-JD',
-        'poisson_selfattention_temporal_with_labels_selfattention_temporal_with_labels_mlp-cm-dd_separate':'SA-FNN-DD'
+        'selfattention_mlp-cm_temporal_with_labels':'SA-FNN',
+        'selfattention_mlp-cm-jd_temporal_with_labels':'SA-FNN-JD',
+        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_mlp-cm-dd':'SA-FNN-DD'
     }
     
     models_rmtpp = {
-        'gru_rmtpp_temporal_with_labels_adjust_param':'RMTPP',
-        'gru_rmtpp-jd_temporal_with_labels_adjust_param':'RMTPP-JD',
-        'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd_separate':'RMTPP-DD',
+        'gru_rmtpp_temporal_with_labels':'RMTPP',
+        'gru_rmtpp-jd_temporal_with_labels':'RMTPP+',
+        'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd':'RMTPP++',
     }
 
     models_sa_rmtpp = {
-        'selfattention_rmtpp_temporal_with_labels_adjust_param':'SA-RMTPP',
-        'selfattention_rmtpp-jd_temporal_with_labels_adjust_param':'SA-RMTPP-JD',
-        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_rmtpp-dd_separate':'SA-RMTPP-DD',
+        'selfattention_rmtpp_temporal_with_labels':'SA-RMTPP',
+        'selfattention_rmtpp-jd_temporal_with_labels':'SA-RMTPP-JD',
+        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_rmtpp-dd':'SA-RMTPP-DD',
     }
 
     models_lnm = {
-        'gru_log-normal-mixture_temporal_with_labels_adjust_param': 'LNM',
-        'gru_log-normal-mixture-jd_temporal_with_labels_adjust_param': 'LNM-JD',
-        'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd_separate': 'LNM-DD',
+        'gru_log-normal-mixture_temporal_with_labels': 'LNM',
+        'gru_log-normal-mixture-jd_temporal_with_labels': 'LNM+',
+        'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd': 'LNM++',
     }
 
     models_sa_lnm = {
-        'selfattention_log-normal-mixture_temporal_with_labels_adjust_param': 'SA-LNM',
-        'selfattention_log-normal-mixture-jd_temporal_with_labels_adjust_param': 'SA-LNM-JD',
-        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_log-normal-mixture-dd_separate': 'SA-LNM-DD',
+        'selfattention_log-normal-mixture_temporal_with_labels': 'SA-LNM',
+        'selfattention_log-normal-mixture-jd_temporal_with_labels': 'SA-LNM-JD',
+        'selfattention_temporal_with_labels_selfattention_temporal_with_labels_log-normal-mixture-dd': 'SA-LNM-DD',
     }
 
     models_lnm_joint = {
-        'gru_joint-log-normal-mixture_temporal_with_labels_adjust_param': 'Joint-LNM'
+        'gru_joint-log-normal-mixture_temporal_with_labels': 'Joint-LNM'
     }
 
     models_poisson = {
@@ -69,8 +69,8 @@ def get_acronym(models):
     }
 
     models_smurf_thp = {
-         'gru_smurf-thp-jd_temporal_with_labels_adjust_param':'STHP-JD',
-         'gru_temporal_with_labels_gru_temporal_with_labels_smurf-thp-dd_separate':'STHP-DD'
+         'gru_smurf-thp-jd_temporal_with_labels':'STHP+',
+         'gru_temporal_with_labels_gru_temporal_with_labels_smurf-thp-dd':'STHP++'
     }
 
     map = {}
@@ -126,7 +126,7 @@ def map_model_name_cal(model):
     elif 'conditional-poisson' in model:
          model_name = 'EC'
     elif 'thp' in model:
-        if 'sep-thp-mix_separate' in model:
+        if 'sep-thp-mix' in model:
             model_name = 'THP-DSHS'
         elif 'thp-mix' in model:
             model_name = 'THP-DCH'

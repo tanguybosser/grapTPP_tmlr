@@ -68,29 +68,12 @@ class THP(MCDecoder):
         self.w_t = nn.Linear(in_features=1, out_features=marks)
         self.w_h = nn.Linear(in_features=units_mlp[0], out_features=marks)
         self.activation = ParametricSoftplus(units=marks)
-        '''
-        self.mlp = MLP(
-            units=units_mlp[1:],
-            activations=activation_mlp,
-            constraint=constraint_mlp,
-            dropout_rates=dropout_mlp,
-            # units_mlp in this class also provides the input dimensionality
-            # of the mlp
-            input_shape=units_mlp[0],
-            activation_final=activation_final_mlp)
-        '''
 
     def log_intensity(
             self,
-            events: Events,
             query: th.Tensor,
             prev_times: th.Tensor,
-            prev_times_idxs: th.Tensor,
-            pos_delta_mask: th.Tensor,
-            is_event: th.Tensor,
-            representations: th.Tensor,
-            representations_mask: Optional[th.Tensor] = None,
-            artifacts: Optional[dict] = None
+            history_representations: th.Tensor
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
         """Compute the log_intensity and a mask
 
@@ -121,14 +104,6 @@ class THP(MCDecoder):
 
         """
         
-        intensity_mask = pos_delta_mask                                 # [B,T]
-        if representations_mask is not None:
-            history_representations_mask = take_2_by_2(
-                representations_mask, index=prev_times_idxs)            # [B,T]
-            intensity_mask = intensity_mask * history_representations_mask
-        history_representations = take_3_by_2(
-            representations, index=prev_times_idxs)                   # [B,T,D]
-
         prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
 
         #delta_t = (query - prev_times)/prev_times
@@ -142,4 +117,71 @@ class THP(MCDecoder):
 
         outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
 
-        return th.log(outputs), intensity_mask, artifacts 
+        return th.log(outputs)
+
+    def log_ground_intensity(self,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            history_representations: th.Tensor,
+            intensity_mask:Optional[th.Tensor] = None):
+
+        log_marked_intensity = self.log_intensity(
+                                        query=query,
+                                        prev_times=prev_times,
+                                        history_representations=history_representations)
+
+        ground_intensity = th.sum(th.exp(log_marked_intensity), dim=-1)
+
+        return th.log(ground_intensity)
+
+
+
+    def forward(self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None):
+    
+        intensity_mask = pos_delta_mask                                 # [B,T]
+        if representations_mask is not None:
+            history_representations_mask = take_2_by_2(
+                representations_mask, index=prev_times_idxs)            # [B,T]
+            intensity_mask = intensity_mask * history_representations_mask
+
+        history_representations = take_3_by_2(
+            representations, index=prev_times_idxs)                   # [B,T,D]
+
+        log_marked_intensity = self.log_intensity(
+                                                query=query,
+                                                prev_times=prev_times,
+                                                history_representations=history_representations)
+        
+        marked_intensity = th.exp(log_marked_intensity)
+
+        ground_intensity = th.sum(marked_intensity, dim=-1)
+        log_ground_intensity = th.log(ground_intensity)
+        
+        mark_pmf = marked_intensity / ground_intensity.unsqueeze(-1)
+        log_mark_pmf = th.log(mark_pmf)
+
+        ground_intensity_integral = self.intensity_integral(
+                                            query=query, 
+                                            prev_times=prev_times,
+                                            prev_times_idxs=prev_times_idxs,
+                                            intensity_mask=intensity_mask,
+                                            representations=representations)
+                                            
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h = history_representations[th.arange(batch_size), last_event_idx,:]
+        artifacts = {}
+        artifacts['last_h'] = last_h.detach().cpu().numpy()
+
+        return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts

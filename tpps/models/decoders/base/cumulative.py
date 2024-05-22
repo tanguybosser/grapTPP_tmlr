@@ -1,6 +1,7 @@
 import abc
 
 import torch as th
+import torch.nn as nn
 
 from typing import Optional, Tuple, Dict
 
@@ -10,7 +11,7 @@ from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
 from tpps.pytorch.layers.log import Log
 
 from tpps.utils.stability import epsilon, check_tensor, subtract_exp
-
+from tpps.utils.nnplus import non_neg_param
 
 class CumulativeDecoder(VariableHistoryDecoder, abc.ABC):
     """Decoder based on Cumulative intensity method. Here, the cumulative
@@ -50,7 +51,26 @@ class CumulativeDecoder(VariableHistoryDecoder, abc.ABC):
             **kwargs)
         self.do_zero_subtraction = do_zero_subtraction
         self.model_log_cm = model_log_cm
+    
+    def reset_parameters(self):
+        nn.init.uniform_(self.mu)
+    
+    def log_mark_pmf(
+            self, 
+            query_representations:th.Tensor, 
+            history_representations:th.Tensor):
+        
+        history_times = th.cat((history_representations, query_representations), dim=-1)
+        p_m = th.softmax(
+                self.marks2(
+                    self.mark_activation(self.mark_time(history_times))), dim=-1)
+        
+        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
 
+        return th.log(p_m)
+    
+    
+    '''
     @abc.abstractmethod
     def cum_intensity(
             self,
@@ -95,7 +115,9 @@ class CumulativeDecoder(VariableHistoryDecoder, abc.ABC):
             artifacts: Some measures
         """
         pass
-
+    '''
+    
+    '''
     def forward(
             self,
             events: Events,
@@ -264,3 +286,4 @@ class CumulativeDecoder(VariableHistoryDecoder, abc.ABC):
                 intensity_integrals,
                 intensity_mask,
                 artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
+    '''

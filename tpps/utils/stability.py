@@ -51,6 +51,7 @@ def check_tensor(
         strict: Optional[bool] = False):
     """Check if a tensor is valid """
     if th.isnan(t).sum() != 0:
+        print(t)
         print(th.isnan(t).sum(), t.shape)
     assert th.isnan(t).sum() == 0
     assert th.isinf(t).sum() == 0

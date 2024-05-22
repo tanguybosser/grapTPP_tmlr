@@ -6,7 +6,7 @@ import numpy as np
 import pickle as pkl
 
 sys.path.remove(os.path.abspath(os.path.join('..', 'neuralTPPs')))
-sys.path.append(os.path.abspath(os.path.join('..', 'icml')))
+sys.path.append(os.path.abspath(os.path.join('..', 'neurips')))
 
 from argparse import ArgumentParser, Namespace
 
@@ -41,7 +41,7 @@ def load_models(args):
     return model_base, model_dd
 
 def load_model(args):
-    model_name = f'{args.dataset}_{args.model_name}_split{args.split}'
+    model_name = f'{args.dataset}_{args.model_name}_split0'
     model_path = os.path.join(args.save_check_dir, model_name + '.pth')    
     model_args = load_model_args(args, model_name)
     
@@ -69,7 +69,7 @@ def get_test_sequence(args, n_seq=1):
         args = Namespace(**args_dic)
     sequence = []
     artifacts = {'marked_intensity':[], 'ground_intensity':[], 'true_mark_pmf':[], 'intensity_times':[]}
-    seq_process, artifacts_process = simulate_seqs(args, n_seq=n_seq)
+    seq_process, artifacts_process = simulate_seqs(args)
     sequence.extend(seq_process)
     artifacts['marked_intensity'].extend(artifacts_process['marked_intensity'])
     artifacts['ground_intensity'].extend(artifacts_process['ground_intensity'])
@@ -101,8 +101,8 @@ def plot_hawkes_intensity(args):
         window_start=window_start, window_end=window_end)
         
         intensity_times = artifacts_seq['intensity_times'][0][1:]
-        true_marked_intensity = artifacts_seq['marked_intensity'][0][1:]
-        true_ground_intensity = artifacts_seq['ground_intensity'][0][1:]
+        true_marked_intensity = artifacts_seq['marked_intensity'][0][100:]
+        true_ground_intensity = artifacts_seq['ground_intensity'][0][100:]
         intensity_times = th.tensor(intensity_times, dtype=th.float32).unsqueeze(0).to(args.device)
         marked_intensities, ground_intensities, diffs_marked, diffs_ground = [], [], [], []
         for model in models:
@@ -131,11 +131,11 @@ def plot_hawkes_intensity(args):
 
 #carefull seed 
 def compute_intensity_differences(args):
-    loader, artifacts_seq = get_test_sequence(args, n_seq=200) #[np, L]
+    loader, artifacts_seq = get_test_sequence(args) #[np, L]
     print(f'MODEL: {args.model_name}')
     model = load_model(args)
     n_seq = 0
-    diffs_marked = np.zeros(5)
+    diffs_marked = np.zeros(args.marks)
     diffs_ground = 0
     for i, batch in enumerate(loader):
         times, labels = batch["times"].to(args.device), batch["labels"].to(args.device)
@@ -147,15 +147,24 @@ def compute_intensity_differences(args):
         times=times, mask=mask, labels=labels,
         window_start=window_start, window_end=window_end)
         
-        intensity_times = artifacts_seq['intensity_times'][i][1:]
+        first_event = float(min(times[0]))
+        intensity_times = artifacts_seq['intensity_times'][i][1:] 
+        mask = intensity_times > first_event + 0.001
+        intensity_times = intensity_times[mask]
+
         true_marked_intensity = artifacts_seq['marked_intensity'][i][1:]
         true_ground_intensity = artifacts_seq['ground_intensity'][i][1:]
+        true_marked_intensity = true_marked_intensity[mask]
+        true_ground_intensity = true_ground_intensity[mask]
         intensity_times = th.tensor(intensity_times, dtype=th.float32).unsqueeze(0).to(args.device)
 
-        marked_log_intensity, _, intensity_mask, _ = model.artifacts(
+        log_ground_intensity, log_mark_pmf, _ , intensity_mask, _ = model.artifacts(
             query=intensity_times, events=events)
-        marked_intensity = th.exp(marked_log_intensity)
-        ground_intensity = th.sum(marked_intensity, dim=-1)
+        
+        ground_intensity = th.exp(log_ground_intensity)
+        mark_pmf = th.exp(log_mark_pmf)
+        marked_intensity = ground_intensity.unsqueeze(-1) * mark_pmf 
+
         marked_intensity = marked_intensity.squeeze(0).detach().cpu().numpy()
         ground_intensity = ground_intensity.squeeze(0).detach().cpu().numpy()
         diff_marked = mean_absolute_deviation(marked_intensity, true_marked_intensity)
@@ -166,7 +175,7 @@ def compute_intensity_differences(args):
     diffs_marked = list(diffs_marked / n_seq)
     diffs_ground = diffs_ground / n_seq
     results = {'marked':diffs_marked, 'ground':diffs_ground}
-    save_path = f'results/simulations/{args.dataset}_{args.model_name}.txt'
+    save_path = f'results/simulations3/{args.dataset}_{args.model_name}_split{args.split}.txt'
     with open(save_path, "wb") as fp: 
         pkl.dump(results, fp)
     print('end')
@@ -190,14 +199,24 @@ def plot_hawkes_intensity_unique(args):
         times=times, mask=mask, labels=labels,
         window_start=window_start, window_end=window_end)
         
-        intensity_times = artifacts_seq['intensity_times'][j][1:]
+        first_event = float(min(times[0]))
+        intensity_times = artifacts_seq['intensity_times'][j][1:] 
+        mask = intensity_times > first_event + 0.001
+        intensity_times = intensity_times[mask]
+
         true_marked_intensity = artifacts_seq['marked_intensity'][j][1:]
         true_ground_intensity = artifacts_seq['ground_intensity'][j][1:]
+        true_marked_intensity = true_marked_intensity[mask]
+        true_ground_intensity = true_ground_intensity[mask]
+        
         intensity_times = th.tensor(intensity_times, dtype=th.float32).unsqueeze(0).to(args.device)
-        marked_log_intensity, _, intensity_mask, _ = model.artifacts(
+        log_ground_intensity, log_mark_pmf, _ , intensity_mask, _ = model.artifacts(
             query=intensity_times, events=events)
-        marked_intensity = th.exp(marked_log_intensity)
-        ground_intensity = th.sum(marked_intensity, dim=-1)
+        
+        ground_intensity = th.exp(log_ground_intensity)
+        mark_pmf = th.exp(log_mark_pmf)
+        marked_intensity = ground_intensity.unsqueeze(-1) * mark_pmf 
+
         marked_intensity = marked_intensity.squeeze(0).detach().cpu().numpy()
         ground_intensity = ground_intensity.squeeze(0).detach().cpu().numpy()
         diff_marked = mean_absolute_deviation(marked_intensity, true_marked_intensity)
@@ -215,7 +234,7 @@ def plot_hawkes_intensity_unique(args):
         axes_g.plot(intensity_times, true_ground_intensity, color='red', label='True')
         axes_g.plot(intensity_times, ground_intensity, color='green', label=f'Mod. ({np.round(diff_ground,3)})')
         axes_g.legend()
-        save_dir = f'figures/simulations3/{args.model_name}'
+        save_dir = f'figures/simulations4/{args.model_name}'
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         save_path = f'{save_dir}/{j}.pdf'
@@ -229,20 +248,20 @@ def mean_absolute_deviation(intensity, true_intensity):
 
 def map_model_name(model_name):
     mapping={
-    'gru_thp_temporal_with_labels_adjust_param_nodiv':'THP',
-    'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd_separate_nodiv':'THP-DD',
+    'gru_thp_temporal_with_labels':'THP',
+    'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd':'THP-DD',
 
-    'gru_sahp_temporal_with_labels_adjust_param':'SAHP',
-    'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd_separate':'SAHP-DD',
+    'gru_sahp_temporal_with_labels':'SAHP',
+    'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd':'SAHP-DD',
 
-    'poisson_gru_mlp-cm_temporal_with_labels_adjust_param':'FNN',
-    'poisson_gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd_separate':'FNN-DD',
+    'gru_mlp-cm_temporal_with_labels':'FNN',
+    'gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd':'FNN-DD',
 
-    'gru_log-normal-mixture_temporal_with_labels_adjust_param':'LNM',
-    'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd_separate':'LNM-DD',
+    'gru_log-normal-mixture_temporal_with_labels':'LNM',
+    'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd':'LNM-DD',
 
-    'gru_rmtpp_temporal_with_labels_adjust_param':'RMTPP',
-    'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd_separate':'RMTPP-DD'
+    'gru_rmtpp_temporal_with_labels':'RMTPP',
+    'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd':'RMTPP-DD'
     }
     return mapping[model_name]
 
@@ -261,6 +280,6 @@ if __name__ == "__main__":
     args.device = th.device('cuda') if th.cuda.is_available() else th.device('cpu')
     args.seed = seed
     #plot_hawkes_intensity(args)
-    plot_hawkes_intensity_unique(args)
-    #compute_intensity_differences(args)
+    #plot_hawkes_intensity_unique(args)
+    compute_intensity_differences(args)
     print('stop')

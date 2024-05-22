@@ -1,7 +1,7 @@
 #!/bin/bash
   
 #SBATCH --job-name=sa_thp_dd
-#SBATCH --output=work_outputs/param.out
+#SBATCH --output=neurips_output/sa_thp_dd.out
 
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=10G
@@ -13,39 +13,36 @@
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/lastfm_filtered' --save-check-dir 'checkpoints/icml/lastfm_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 4 --split $split \
+--save-results-dir 'results/neurips2/lastfm_filtered' --save-check-dir 'checkpoints/neurips2/lastfm_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
-: "
 ##MOOC
 
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/neurips2/mooc_filtered' --save-check-dir 'checkpoints/neurips2/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 32 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
@@ -54,18 +51,17 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'github_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/github_filtered' --save-check-dir 'checkpoints/icml/github_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--save-results-dir 'results/neurips2/github_filtered' --save-check-dir 'checkpoints/neurips2/github_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
@@ -74,18 +70,17 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/reddit_filtered_short' --save-check-dir 'checkpoints/icml/reddit_filtered_short' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--save-results-dir 'results/neurips2/reddit_filtered_short' --save-check-dir 'checkpoints/neurips2/reddit_filtered_short' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
@@ -94,18 +89,17 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'retweets_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/retweets_filtered_short' --save-check-dir 'checkpoints/icml/retweets_filtered_short' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--save-results-dir 'results/neurips2/retweets_filtered_short' --save-check-dir 'checkpoints/neurips2/retweets_filtered_short' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
@@ -114,38 +108,17 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/stack_overflow_filtered' --save-check-dir 'checkpoints/icml/stack_overflow_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
+--save-results-dir 'results/neurips2/stack_overflow_filtered' --save-check-dir 'checkpoints/neurips2/stack_overflow_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--encoder-units-rnn 48 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
+--encoder-units-mlp 64 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'separate' \
 --decoder-mc-prop-est 50
 done
 
-: "
-# Hawkes
-
-for split in 0
-do
-python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/hawkes_exponential_mutual' --save-check-dir 'checkpoints/icml/hawkes_exponential_mutual' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 8 --split $split \
---encoder-histtime 'selfattention' --encoder-histmark 'selfattention' \
---encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 2 --encoder-n-heads 1 --encoder-attn-activation 'softmax' \
---encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
---decoder 'thp-dd' \
---decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
---decoder-hist-time-grouping 'concatenation' \
---separate-training True \
---exp-name 'separate' \
---decoder-mc-prop-est 50
-done

@@ -7,7 +7,7 @@ from logging.config import valid_ident
 from unittest import result
 #import imageio
 import sys, os
-sys.path.append(os.path.abspath(os.path.join('..', 'esann2023')))
+sys.path.append(os.path.abspath(os.path.join('..', 'neurips')))
 
 import pdb
 import json
@@ -267,6 +267,7 @@ def main(args: Namespace):
     test_metrics = metrics['test']
     if args.verbose:
         print(metrics, flush=True)
+    return 
     if args.save_results_dir is not None:
         save_evaluation_results(train_metrics, val_metrics, test_metrics,save_path=args.save_results_dir, exp_name=model_name ,args=args)
 

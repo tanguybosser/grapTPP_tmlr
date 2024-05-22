@@ -104,7 +104,7 @@ def load_file(file_to_find, results_dir):
         results = pickle.load(f) 
     return results
 
-def mark_calibration(models, dataset, results_dir, splits, save_dir=None, title=None):
+def mark_calibration(models, dataset, results_dir, splits, save_dir=None, title=None, appendix=False):
     results_dir = os.path.join(results_dir, dataset)
     df_all = pd.DataFrame()
     for model in models:
@@ -121,11 +121,12 @@ def mark_calibration(models, dataset, results_dir, splits, save_dir=None, title=
             accuracy_all_splits.append(accuracy)
             samples_all_split.append(prop_samples)
         accuracy = np.array(accuracy_all_splits)
+        ste = np.std(accuracy, axis=0)/(np.sqrt(accuracy.shape[0]))
         accuracy = np.mean(accuracy, axis=0)
         samples = np.array(samples_all_split)
         samples = np.mean(samples, axis=0)
         bins = [round(1/(2*len(accuracy)) + i/len(accuracy),2) for i in range(len(accuracy))]
-
+        data['error'] = ste
         data['accuracy'] = accuracy
         data['perfect calibration'] = bins
         data['samples'] = samples
@@ -134,7 +135,7 @@ def mark_calibration(models, dataset, results_dir, splits, save_dir=None, title=
         data['model'] = [model_name] * len(accuracy) 
         df = pd.DataFrame(data=data)
         df_all = pd.concat([df_all, df], axis=0)
-    sns.set_theme(style="white", rc={"font.size":20, "axes.facecolor": (0, 0, 0, 0), 'axes.linewidth':2})
+    sns.set_theme(style="white", rc={"font.size":16, "axes.facecolor": (0, 0, 0, 0), 'axes.linewidth':2})
     sns.set_style("whitegrid")
     palette = sns.color_palette("Set2", 12)
     g2 = sns.FacetGrid(df_all, palette=palette, col="model", hue="model", aspect=0.7)
@@ -152,53 +153,66 @@ def mark_calibration(models, dataset, results_dir, splits, save_dir=None, title=
     g1.fig.subplots_adjust(wspace=.1)
     #g2.set_titles(list(titles))
     dataset_name = map_dataset_name(dataset)
-    if title == 1 and dataset != 'lastfm_filtered':
-        g2.fig.suptitle(dataset_name, y=0.95)
     g2.set_titles("")
     #g2
     ax = g2.fig.axes[0]
     new_ticks = np.append(ax.get_xticks(),10) - 0.5
-    xxx = np.round(np.arange(0,1.1,.1),1)
+    xxx = np.round(np.arange(0.1,1.1,.1),1)
     #g2.set(xticks=new_ticks)
-    g2.set(xticks=[])
-    #g2.set_xticklabels(xxx, fontsize=12)
+    #g2.set(xticks=[])
+    g2.set_xticklabels(xxx, fontsize=12)
     g2.set_yticklabels(np.round(ax.get_yticks(),1),fontsize=14)
     g2.set_ylabels('Accuracy', fontsize=20)
     g2.set(xlabel=" ")
     ax = g2.fig.axes[0]
 
     axes = g2.fig.axes
-    #mid_ax = int((len(axes)+1)/2)
-    mid_ax = 1
     for i, ax in enumerate(axes):
         ax.set_xlabel(" ")
-    mid_ax = axes[mid_ax]
-    if title == 2:
-        mid_ax.set_xlabel('Confidence', fontsize=20)
-    #mid_ax.xaxis.set_label_coords(1.1, -0.1)
+    if not appendix:
+        mid_ax = 1
+    else:
+        mid_ax = 2
+    mid_ax = axes[mid_ax] 
+    mid_ax.annotate('Confidence', xy=(0.55,-0.2), ha='left', va='top',
+        xycoords='axes fraction', textcoords='offset points', fontsize=20)
+    #mid_ax = axes[mid_ax]   
+    #mid_ax.set_xlabel('Confidence', fontsize=20)
     new_ticks = np.append(ax.get_xticks(),10) - 0.5
     #g1.set(xticks=new_ticks)
-    g1.set(xticks=[])
+    #g1.set(xticks=[])
     for ax in g2.axes.ravel():
         hand, labl = ax.get_legend_handles_labels()
         ax.legend(np.unique(labl))
         ax.set_ylim(0,1)
-    #g1.set_xticklabels(xxx, fontsize=12)
+    for ax in axes:
+        for label in ax.get_xticklabels()[::2]:
+            label.set_visible(False)
+    #g2.set_xticklabels(np.round(ax.get_xticks(),1),fontsize=14)
     #ax.set_ylim(0,0.6)
     g1.set_titles("")
     #g1.set_yticklabels(np.round(ax.get_yticks(),1),fontsize=14)
     g1.set_ylabels('p% Samples', fontsize=20)
-    g1.set_xlabels('')
-    g2.fig.suptitle(map_dataset_name(dataset), fontsize=16)
-    g1.savefig(f'figures/calibration/mark/{map_dataset_name(dataset)}_samples.pdf' , bbox_inches='tight')
-    g2.savefig(f'figures/calibration/mark/{map_dataset_name(dataset)}_cal.pdf' , bbox_inches='tight')  
+    #g1.set_xlabels('')
+    #g2.fig.suptitle(map_dataset_name(dataset), fontsize=16)
+    #g1.savefig(f'figures/calibration_neurips/{map_dataset_name(dataset)}_samples.pdf' , bbox_inches='tight')
+    for i, ax in enumerate(axes):
+        x_coords = [p.get_x() + 0.5 * p.get_width() for p in ax.patches]
+        y_coords = [p.get_height() for p in ax.patches]
+        ax.errorbar(x=x_coords, y=y_coords, yerr=df_all["error"][i*10:i*10+10], fmt="none", c="k")
+    if title == '1' and appendix:
+        g2.fig.suptitle(dataset_name, y=0.95)
+    g2.savefig(f'figures/calibration_neurips/mark/{map_dataset_name(dataset)}_cal{title}.pdf' , bbox_inches='tight')  
+    
+    
+    
     plt.show()
 
 
-def time_calibration(models, dataset, results_dir, splits, save_dir=None, title=None):
+def time_calibration(models, dataset, results_dir, splits, save_dir=None, title=None, appendix=False):
     results_dir = os.path.join(results_dir, dataset)
     df_all = pd.DataFrame()
-    plt.rcParams["figure.figsize"] = (8,8)
+    #plt.rcParams["figure.figsize"] = (12,12)    
     for model in models:
         keys = ['True quantiles', 'Predicted quantiles', 'model']
         data = dict.fromkeys(keys)
@@ -216,32 +230,47 @@ def time_calibration(models, dataset, results_dir, splits, save_dir=None, title=
         data['model'] = [model]*len(obs_freq)
         df = pd.DataFrame(data=data)
         df_all = pd.concat([df_all, df], axis=0, ignore_index=True)
+    sns.set_theme(style="white", rc={"font.size":16, "axes.facecolor": (0, 0, 0, 0), 'axes.linewidth':2})
     sns.set_style("whitegrid")
     palette = sns.color_palette("Set2", 12)
     
-    g1 = sns.FacetGrid(df_all, palette=palette, col="model", hue="model", aspect=1.1)
-    g1.map_dataframe(sns.lineplot, x='Predicted probability', y='Observed frequency', linewidth=1, marker='o')
+    g1 = sns.FacetGrid(df_all, palette=palette, col="model", hue="model", aspect=0.7)
+    g1.map_dataframe(sns.lineplot, x='Predicted probability', y='Observed frequency', linewidth=3)
     g1.map_dataframe(sns.lineplot, x='Predicted probability', y='Predicted probability', color='black')
     g1.fig.subplots_adjust(wspace=.2)
     g1.set(xlim=[0,1], ylim=[0,1])
-    g1.set_xlabels('Predicted probability', fontsize=16)
-    g1.set_ylabels('Observed frequency', fontsize=16)
+    axes = g1.fig.axes
+    for i, ax in enumerate(axes):
+        ax.set_xlabel(" ")
+    if appendix: 
+        mid_ax = 2
+    else:
+        mid_ax = 1
+    mid_ax = axes[mid_ax]
+    #mid_ax.set_xlabel('Predicted probability', fontsize=20)
+    mid_ax.annotate('Predicted Probability', xy=(0.35,-0.2), ha='left', va='top',
+        xycoords='axes fraction', textcoords='offset points', fontsize=20)
+    #g1.set_xlabels('Predicted probability', fontsize=16)
+    g1.set_ylabels('Frequency', fontsize=20)
     g1.set_titles("")
-    g1.fig.suptitle(map_dataset_name(dataset), fontsize=16)
+    #g1.set(xticks=[])
+    #g1.set_xlabels('')
+    g1.set_yticklabels(np.round(ax.get_yticks(),1),fontsize=14)
+    #xxx = np.round(np.arange(0.1,1.1,.1),1)
+    #g2.set(xticks=new_ticks)
+    #g2.set(xticks=[])
+    #g1.set_xticklabels(xxx, fontsize=12)
+    #for ax in axes:
+    #    for label in ax.get_xticklabels()[::2]:
+    #        label.set_visible(False)
+    #g1.fig.suptitle(map_dataset_name(dataset), fontsize=16)
     for ax in g1.axes.ravel():
         hand, labl = ax.get_legend_handles_labels()
         ax.legend(np.unique(labl))
-    #titles = list(map(map_model, models))
-    #for i, ax in enumerate(g1.fig.axes):
-    #    ax.set_title(titles[i], fontsize=20)
-    ##    if show_labels is True:
-    #        if i != 2:
-    #            ax.set_xlabel(" ")
-    #    else:
-    #        ax.set_xlabel(" ")
-    #g1.set_yticklabels(np.round(ax.get_yticks(),1),fontsize=14)
-    #g1.set_xticklabels(np.round(ax.get_yticks(),1),fontsize=14)
-    g1.savefig(f'figures/calibration/time/{map_dataset_name(dataset)}.pdf' , bbox_inches='tight')
+    dataset_name = map_dataset_name(dataset)
+    #if title == '1':
+    #    g1.fig.suptitle(dataset_name, y=0.95)
+    g1.savefig(f'figures/calibration_neurips/time/{map_dataset_name(dataset)}_{title}.pdf' , bbox_inches='tight')
 
 def calibration(cdf, num_bins):
     cdf = np.array([item for seq in cdf for item in seq])  
@@ -541,7 +570,7 @@ def plot_error_per_seq(result_dir, files, dataset, seq_num, split):
     ax.legend()
     fig.savefig('figures/intensities/test.png', bbox_inches='tight')
 
-def tsne_history(result_dir, dataset, models_group ,split=0, seed=0):
+def tsne_history(result_dir, dataset, models_group ,split=0, seed=0, save_dir=None):
     result_dir = os.path.join(result_dir, dataset)
     files = os.listdir(result_dir)
     fig, ax = plt.subplots(1,2, figsize=(10,5))
@@ -562,26 +591,30 @@ def tsne_history(result_dir, dataset, models_group ,split=0, seed=0):
             model_file = os.path.join(result_dir, model_file)
             with open(model_file, 'rb') as f:
                 results = pickle.load(f)
-            if 'sep' in model:
+            #print(results['test'].keys())
+            if '-dd' in model:
                 h_t = results['test']['last_h_t'].astype(np.float32)
                 h_m = results['test']['last_h_m'].astype(np.float32)
             else:
                 h_c = results['test']['last_h'].astype(np.float32)
-        h = np.concatenate([h_t, h_m, h_c], axis=0)    
-        h_transformed = TSNE(n_components=2,
-                        init='pca', perplexity=5, random_state=seed).fit_transform(h)
-        shape = h_t.shape[0]
-        h_t_transformed = h_transformed[:h_t.shape[0], :]
-        h_m_transformed = h_transformed[h_t.shape[0]:2*h_t.shape[0], :]
-        h_c_transformed = h_transformed[2*h_t.shape[0]:, :]
+        h_dd = np.concatenate([h_t, h_m], axis=0)    
+        h_dd_transformed = TSNE(n_components=2,
+                        init='pca', perplexity=5, random_state=seed).fit_transform(h_dd)
+        h_c_transformed = TSNE(n_components=2,
+                        init='pca', perplexity=5, random_state=seed).fit_transform(h_c)
+        
+        #shape = h_t.shape[0]
+        h_t_transformed = h_dd_transformed[:h_t.shape[0], :]
+        h_m_transformed = h_dd_transformed[h_t.shape[0]:, :]
+        #h_c_transformed = h_transformed[2*h_t.shape[0]:, :]
         if i == 0:
-            ax[i].scatter(h_t_transformed[:,0],h_t_transformed[:,1], color='blue', label=r'$h^t$', alpha=0.5)
-            ax[i].scatter(h_m_transformed[:,0],h_m_transformed[:,1], color='red', label=r'$h^m$', alpha=0.5)
-            ax[i].scatter(h_c_transformed[:,0],h_c_transformed[:,1], color='green', label=r'$h$', alpha=0.5)
+            ax[i].scatter(h_t_transformed[:,0],h_t_transformed[:,1], color='blue', label=r'$h^t$', alpha=0.2)
+            ax[i].scatter(h_m_transformed[:,0],h_m_transformed[:,1], color='red', label=r'$h^m$', alpha=0.2)
+            ax[i].scatter(h_c_transformed[:,0],h_c_transformed[:,1], color='green', label=r'$h$', alpha=0.2)
         else:
-            ax[i].scatter(h_t_transformed[:,0],h_t_transformed[:,1], color='blue', alpha=0.5)
-            ax[i].scatter(h_m_transformed[:,0],h_m_transformed[:,1], color='red', alpha=0.5)
-            ax[i].scatter(h_c_transformed[:,0],h_c_transformed[:,1], color='green', alpha=0.5)
+            ax[i].scatter(h_t_transformed[:,0],h_t_transformed[:,1], color='blue', alpha=0.2)
+            ax[i].scatter(h_m_transformed[:,0],h_m_transformed[:,1], color='red', alpha=0.2)
+            ax[i].scatter(h_c_transformed[:,0],h_c_transformed[:,1], color='green', alpha=0.2)
         #ax[i].legend(loc='upper right')
         ax[i].set_xticklabels([])
         ax[i].set_yticklabels([])
@@ -590,13 +623,15 @@ def tsne_history(result_dir, dataset, models_group ,split=0, seed=0):
     fig.text(0.5, 0.04, 't-SNE component 1', va='center', ha='center', fontsize=20)
     fig.text(0.1, 0.5, 't-SNE component 2', va='center', ha='center', rotation='vertical', fontsize=20)
     dataset_name = map_dataset_name(dataset)
-    fig.suptitle(dataset_name, y=1.07, fontsize=20)
+    #fig.suptitle(dataset_name, y=1.07, fontsize=20)
     bb = (fig.subplotpars.left, fig.subplotpars.top+0.02, 
       fig.subplotpars.right-fig.subplotpars.left,.1)
 
     fig.legend(bbox_to_anchor=bb, mode="expand", loc="lower left",
                ncol=3, borderaxespad=0., bbox_transform=fig.transFigure, fontsize=20)
-    fig.savefig(f'figures/tsne/{dataset}_bis.png', bbox_inches='tight')
+    if save_dir is not None:
+        save_path = f'{save_dir}/{dataset}.pdf'
+        fig.savefig(save_path, bbox_inches='tight')
     plt.show()
 
 
@@ -684,15 +719,24 @@ def plot_training_losses(result_dir, models, dataset ,split, save_dir=None):
         fig.savefig(save_file, bbox_inches='tight')
 
 
-def computational_time(result_dir, model, dataset, split):
-    model_file = find_model_file(result_dir, model, dataset, split)
-    with open(model_file, 'rb') as f:
-            results = pickle.load(f)
-    dur = [results['train'][i]['dur'] for i in range(len(results['train']))]
-    mean_dur = np.mean(dur)
-    std_dur = np.std(dur)
-    print(model)
-    print(f'Mean:{mean_dur}, Std.:{std_dur}')
+def computational_time(result_dir, model, dataset):
+    #model_file = find_model_file(result_dir, model, dataset, split)
+    if model == 'smurf-thp':
+        model_types = ['-jd','-dd']
+    else:
+        model_types = ['','-jd','-dd']
+    for types in model_types:
+        if types == '-dd':
+            file = f'{result_dir}/{dataset}/{dataset}_gru_temporal_with_labels_gru_temporal_with_labels_{model}{types}_split0.txt'
+        else:
+            file = f'{result_dir}/{dataset}/{dataset}_gru_{model}{types}_temporal_with_labels_split0.txt'
+        with open(file, 'rb') as f:
+                results = pickle.load(f)
+        dur = [results['train'][i]['dur'] for i in range(len(results['train'])-2)]
+        mean_dur = np.mean(dur)
+        ste_dur = np.std(dur)/(np.sqrt(len(dur)))
+        print(f'{model}{types}')
+        print(f'Mean:{np.round(mean_dur,2)}, Std.:{np.round(ste_dur,2)}')
     
 def plot_marked_sequences(data_dir, dataset, num_seq, min_events=5, max_events=100):
     file = os.path.join(data_dir, dataset)

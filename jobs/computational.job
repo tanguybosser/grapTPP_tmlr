@@ -1,27 +1,27 @@
 #!/bin/bash
   
 #SBATCH --job-name=comput
-#SBATCH --output=work_outputs/comput.out
+#SBATCH --output=work_outputs/comput_bis.out
 
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=10G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a4000:1
 
-
+: "
 ## LNM
 
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'log-normal-mixture' \
+--decoder-encoding 'log_times_only' \
 --decoder-units-mlp 32 --decoder-units-mlp 16 \
 --decoder-n-mixture 32 \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -30,18 +30,16 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split 0 \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'log-normal-mixture-jd' \
 --decoder-units-mlp 32 --decoder-units-mlp 16 \
 --decoder-n-mixture 32 \
---decoder-n-mark-mixture 1 \
 --decoder-encoding 'log_times_only' \
 --decoder-hist-time-grouping 'concatenation' \
---exp-name 'comput' \
 --train-epochs 50
 done 
 
@@ -50,11 +48,11 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder-histtime 'gru' --encoder-histmark 'gru' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 27 --encoder-layers-rnn 1 \
+--encoder-units-rnn 28 --encoder-layers-rnn 1 \
 --encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
 --decoder 'log-normal-mixture-dd' \
 --decoder-units-mlp 32 --decoder-units-mlp 16 \
@@ -62,7 +60,6 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-d
 --decoder-encoding 'log_times_only' \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -71,14 +68,14 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'rmtpp' \
+--decoder-encoding 'log_times_only' \
 --decoder-units-mlp 32 \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -88,15 +85,15 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'rmtpp-jd' \
+--decoder-encoding 'log_times_only' \
 --decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -105,17 +102,17 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder-histtime 'gru' --encoder-histmark 'gru' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 27 --encoder-layers-rnn 1 \
+--encoder-units-rnn 40 --encoder-layers-rnn 1 \
 --encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
 --decoder 'rmtpp-dd' \
---decoder-units-mlp 32 \
+--decoder-encoding 'log_times_only' \
+--decoder-units-mlp 16 \
 --separate-training True \
 --decoder-hist-time-grouping 'concatenation' \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -124,15 +121,14 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson True --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 --encoder-embedding-constraint 'nonneg' \
---encoder-units-rnn 48 --encoder-layers-rnn 1 --encoder-constraint-rnn 'nonneg' \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 --encoder-constraint-rnn 'nonneg' \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' --encoder-constraint-mlp 'nonneg' \
 --decoder 'mlp-cm' --decoder-encoding 'log_times_only' --decoder-emb-dim 8 --decoder-embedding-constraint 'nonneg' \
---decoder-units-mlp 32 --decoder-units-mlp 16 --decoder-activation-mlp 'gumbel_softplus' \
+--decoder-units-mlp 64 --decoder-units-mlp 46 --decoder-activation-mlp 'gumbel_softplus' \
 --decoder-activation-final-mlp 'parametric_softplus' --decoder-constraint-mlp 'nonneg' \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -141,17 +137,16 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson True --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 --encoder-embedding-constraint 'nonneg' \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 --encoder-constraint-rnn 'nonneg' \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' --encoder-constraint-mlp 'nonneg' \
 --decoder 'mlp-cm-jd' --decoder-encoding 'log_times_only' --decoder-emb-dim 8 --decoder-embedding-constraint 'nonneg' \
---decoder-units-mlp 32 --decoder-units-mlp 16 --decoder-activation-mlp 'gumbel_softplus' \
+--decoder-units-mlp 64 --decoder-units-mlp 26 --decoder-activation-mlp 'gumbel_softplus' \
 --decoder-activation-final-mlp 'parametric_softplus' --decoder-constraint-mlp 'nonneg' \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
---exp-name 'comput' \
 --train-epochs 50
 done
 
@@ -160,19 +155,18 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson True --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder-histtime 'gru' --encoder-histmark 'gru' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' \
 --encoder-emb-dim 8 --encoder-embedding-constraint 'nonneg' \
---encoder-units-rnn 32 --encoder-layers-rnn 1 --encoder-constraint-rnn 'nonneg' \
+--encoder-units-rnn 30 --encoder-layers-rnn 1 --encoder-constraint-rnn 'nonneg' \
 --encoder-units-mlp 16 --encoder-activation-mlp 'relu' --encoder-constraint-mlp 'nonneg' \
 --decoder 'mlp-cm-dd' --decoder-encoding 'log_times_only' --decoder-emb-dim 8 --decoder-embedding-constraint 'nonneg' \
---decoder-units-mlp 16 --decoder-units-mlp 16 --decoder-activation-mlp 'gumbel_softplus' \
+--decoder-units-mlp 32 --decoder-units-mlp 32 --decoder-activation-mlp 'gumbel_softplus' \
 --decoder-activation-final-mlp 'parametric_softplus' --decoder-constraint-mlp 'nonneg' \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'comput' \
 --train-epochs 50
 done 
 
@@ -182,19 +176,18 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 46 --encoder-layers-rnn 1 \
+--encoder-units-rnn 36 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'thp' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 32 \
+--decoder-units-mlp 96 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50
 done
 
 
@@ -203,8 +196,8 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
@@ -213,9 +206,8 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-d
 --decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
 done
 
 ## THP - DD
@@ -223,30 +215,29 @@ done
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder-histtime 'gru' --encoder-histmark 'gru' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 32 --encoder-layers-rnn 1 \
+--encoder-units-rnn 28 --encoder-layers-rnn 1 \
 --encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
 --decoder 'thp-dd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 16 \
+--decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50
 done
-
+"
 
 ## SAHP 
 
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 46 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
@@ -255,38 +246,39 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-d
 --decoder-units-mlp 32 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
 done
 
+: "
 ## SAHP -JD 
 
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
---encoder-units-rnn 38 --encoder-layers-rnn 1 \
+--encoder-units-rnn 46 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
 --decoder 'sahp-jd' \
 --decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
---decoder-units-mlp 32 \
+--decoder-units-mlp 16 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50
 done
+"
 
+: "
 ## SAHP - DD
 
 for split in 0
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/icml/mooc_filtered' --save-check-dir 'checkpoints/icml/mooc_filtered' \
---eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
 --encoder-histtime 'gru' --encoder-histmark 'gru' \
 --encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 32 --encoder-layers-rnn 1 \
@@ -296,7 +288,49 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-d
 --decoder-units-mlp 16 \
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training True \
---exp-name 'comput' \
---train-epochs 50 \
---decoder-mc-prop-est 50
+--decoder-mc-prop-est 50 \
+--train-epochs 50
 done
+"
+
+: "
+## STHP - JD
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'smurf-thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50
+done
+
+
+## STHP - DD
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/comput/mooc_filtered' --save-check-dir 'checkpoints/comput/mooc_filtered' \
+--eval-metrics True --include-poisson False --patience 51 --batch-size 32 --split $split \
+--encoder-histtime 'gru' --encoder-histmark 'gru' \
+--encoder-histtime-encoding 'temporal_with_labels' --encoder-histmark-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 28 --encoder-layers-rnn 1 \
+--encoder-units-mlp 16 --encoder-activation-mlp 'relu' \
+--decoder 'smurf-thp-dd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training True \
+--decoder-mc-prop-est 50 \
+--train-epochs 50
+done
+"

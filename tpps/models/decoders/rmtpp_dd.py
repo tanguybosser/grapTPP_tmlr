@@ -3,12 +3,13 @@ import torch.nn as nn
 
 from typing import Dict, Optional, Tuple, List
 
-from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
+from tpps.models.decoders.rmtpp_jd import RMTPP_JD
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, subtract_exp, check_tensor
+from tpps.utils.nnplus import non_neg_param
 
-class RMTPP_DD(VariableHistoryDecoder):
+class RMTPP_DD(RMTPP_JD):
     """Analytic decoder process, uses a closed form for the intensity
     to train the model.
     See https://www.kdd.org/kdd2016/papers/files/rpp1081-duA.pdf.
@@ -28,32 +29,13 @@ class RMTPP_DD(VariableHistoryDecoder):
             **kwargs):
         super(RMTPP_DD, self).__init__(
             name="rmtpp-dd",
-            input_size=units_mlp[0],
+            units_mlp=units_mlp,
+            multi_labels=multi_labels,
+            marks=marks,
             encoding=encoding,
-            marks=marks)
-        self.w = nn.Parameter(th.Tensor(1))
-        self.w_h = nn.Linear(self.input_size, marks)
-        self.w_t  = nn.Linear(self.input_size, 1)
-        self.marks2 = nn.Linear(
-            in_features=units_mlp[1], out_features=marks)
-        self.multi_labels = multi_labels
-        self.reset_parameters()
-        self.hist_time_grouping = hist_time_grouping
-        if self.hist_time_grouping == 'summation':
-            self.marks1 = nn.Linear(
-            in_features=units_mlp[0], out_features=units_mlp[1])
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size, out_features=units_mlp[1]
-            )
-        elif self.hist_time_grouping == 'concatenation':
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size + self.input_size, out_features=units_mlp[1]
-            )
-        self.mark_activation = self.get_mark_activation(mark_activation)
-
-        
-    def reset_parameters(self):
-        nn.init.uniform_(self.w, b=0.001)
+            mark_activation=mark_activation,
+            hist_time_grouping=hist_time_grouping,
+            **kwargs)
 
     def forward(
             self,
@@ -101,6 +83,7 @@ class RMTPP_DD(VariableHistoryDecoder):
 
         """
         
+
         (query_representations,
          intensity_mask) = self.get_query_representations(
             events=events,
@@ -119,72 +102,61 @@ class RMTPP_DD(VariableHistoryDecoder):
             representations_time, index=prev_times_idxs)                   # [B,T,D]
         history_representations_mark = take_3_by_2(                          
             representations_mark, index=prev_times_idxs)
+
+        self.mu.data = non_neg_param(self.mu.data)
+        check_tensor(self.mu.data, positive=True)
+
         v_h_t = self.w_t(history_representations_time)                         #[B,T,1]
-        v_h_t = v_h_t.squeeze()                                         #[B,T]
-        
-        w_delta_t = self.w * (query - prev_times)                     # [B,T]                    #[B,T]
-        
-        base_log_intensity = v_h_t + w_delta_t                        # [B,T]
+        v_h_t = v_h_t.squeeze(-1)                                         #[B,T]
+        delta_t = query - prev_times
+        w_delta_t = self.w * delta_t                     # [B,T]
+    
+        exp_term = th.clamp(w_delta_t + v_h_t, max=80) #Avoids infinity. 
+        exp_term = th.exp(exp_term) 
+        ground_intensity = self.mu + exp_term
+        check_tensor(ground_intensity, positive=True)
+        ground_intensity = ground_intensity + epsilon(dtype=ground_intensity.dtype, device=ground_intensity.device)
+        log_ground_intensity = th.log(ground_intensity)
+        check_tensor(log_ground_intensity)
 
+        log_mark_pmf = self.log_mark_pmf(
+                                query_representations=query_representations,
+                                history_representations=history_representations_mark
+                            )
+        check_tensor(log_mark_pmf)
 
-        if self.hist_time_grouping == 'summation':
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.marks1(history_representations_mark) + self.mark_time(query_representations))), dim=-1) 
-        elif self.hist_time_grouping == 'concatenation':
-            history_times = th.cat((history_representations_mark, query_representations), dim=-1)
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.mark_time(history_times))), dim=-1)
-        
-        regulariser = epsilon(dtype=p_m.dtype, device=p_m.device)
-        p_m = p_m + regulariser
-
-        marked_log_intensity = base_log_intensity.unsqueeze(
-            dim=-1)  # [B,T,1]
-        marked_log_intensity = marked_log_intensity + th.log(p_m)     # [B,T,M]
-
-        intensity_mask = pos_delta_mask                                 # [B,T]
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
                 representations_mask, index=prev_times_idxs)            # [B,T]
             intensity_mask = intensity_mask * history_representations_mask
-
-        exp_1, exp_2 = v_h_t + w_delta_t, v_h_t                         # [B,T]
-        # Avoid exponentiating to get masked infinity
-        exp_1, exp_2 = exp_1 * intensity_mask, exp_2 * intensity_mask   # [B,T]
-        base_intensity_itg = subtract_exp(exp_1, exp_2)
-        base_intensity_itg = base_intensity_itg / self.w                # [B,T]
-        base_intensity_itg = th.relu(base_intensity_itg)
-    
-        marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)   # [B,T,1]
         
-        ones = th.ones_like(p_m)
-        marked_intensity_itg = (marked_intensity_itg / self.marks) * ones #[B,T,M]
-
-        artifacts_decoder = {
-            "base_log_intensity": base_log_intensity,
-            "base_intensity_integral": base_intensity_itg,
-            "mark_probability": p_m}
-        if artifacts is None:
-            artifacts = {'decoder': artifacts_decoder}
-        else:
-            artifacts['decoder'] = artifacts_decoder
-
-        check_tensor(marked_log_intensity)
-        check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
+        exp_1, exp_2 = v_h_t + w_delta_t, v_h_t                         # [B,T]
+        exp_1, exp_2 = exp_1 * intensity_mask, exp_2 * intensity_mask   # [B,T]
+        
+        poisson_integral = self.mu * delta_t                            # [B,T]
+                
+        ground_intensity_integrals = th.exp(exp_1) - th.exp(exp_2)
+        ground_intensity_integrals = ground_intensity_integrals / self.w                # [B,T]
+        
+        ground_intensity_integrals = ground_intensity_integrals + poisson_integral 
+        
+        check_tensor(ground_intensity_integrals * intensity_mask,
                      positive=True)
-        return (marked_log_intensity,
-                marked_intensity_itg,
+        
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h_t = history_representations_time[th.arange(batch_size), last_event_idx,:]
+        last_h_m = history_representations_mark[th.arange(batch_size), last_event_idx,:] #[B,D]
+        artifacts = {}
+        artifacts['last_h_t'] = last_h_t.detach().cpu().numpy()
+        artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
+        
+        return (log_ground_intensity,
+                log_mark_pmf,
+                ground_intensity_integrals,
                 intensity_mask,
                 artifacts)                      # [B,T,M], [B,T,M], [B,T], Dict
 
 
-    def get_mark_activation(self, mark_activation):
-        if mark_activation == 'relu':
-            mark_activation = th.relu
-        elif mark_activation == 'tanh':
-            mark_activation = th.tanh
-        elif mark_activation == 'sigmoid':
-            mark_activation = th.sigmoid
-        return mark_activation

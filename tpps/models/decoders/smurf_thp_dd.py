@@ -6,7 +6,7 @@ from tpps.pytorch.activations import ParametricSoftplus
 
 from typing import List, Optional, Tuple, Dict
 
-from tpps.models.decoders.base.monte_carlo import MCDecoder
+from tpps.models.decoders.smurf_thp_jd import SmurfTHP_JD
 from tpps.models.base.process import Events
 
 from tpps.pytorch.models import MLP
@@ -16,7 +16,7 @@ from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
 
 
-class SmurfTHP_DD(MCDecoder):
+class SmurfTHP_DD(SmurfTHP_JD):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/abs/2002.09291.pdf
 
     Args:
@@ -40,7 +40,6 @@ class SmurfTHP_DD(MCDecoder):
             self,
             # MLP
             units_mlp: List[int],
-            n_mixture:int, 
             # Other params
             mc_prop_est: Optional[float] = 1.,
             emb_dim: Optional[int] = 2,
@@ -48,15 +47,12 @@ class SmurfTHP_DD(MCDecoder):
             encoding: Optional[str] = "times_only",
             time_encoding: Optional[str] = "relative",
             marks: Optional[int] = 1,
-            mark_activation: Optional[str] = 'relu',
-            hist_time_grouping: Optional[str] = 'summation',
-            cond_ind : Optional[bool] = False,
             **kwargs):
         if len(units_mlp) < 2:
             raise ValueError("Units of length at least 2 need to be specified")
         super(SmurfTHP_DD, self).__init__(
             name="smurf-thp-dd",
-            input_size=units_mlp[0],
+            units_mlp=units_mlp,
             mc_prop_est=mc_prop_est,
             emb_dim=emb_dim,
             temporal_scaling=temporal_scaling,
@@ -64,23 +60,8 @@ class SmurfTHP_DD(MCDecoder):
             time_encoding=time_encoding,
             marks=marks,
             **kwargs)
-        self.h1 = nn.Linear(in_features=units_mlp[0], out_features=units_mlp[1])
-        self.h2 = nn.Linear(in_features=units_mlp[0], out_features=units_mlp[1])
-        self.h3 = nn.Linear(in_features=units_mlp[1], out_features=1)
-
-        #self.m1 = nn.Linear(in_features=units_mlp[0], out_features=units_mlp[1])
-        #self.m2 = nn.Linear(in_features=units_mlp[0], out_features=units_mlp[1])
-        #self.m3 = nn.Linear(in_features=units_mlp[1], out_features=marks)
-        self.activation = ParametricSoftplus(units=1)
-
-        self.marks2 = nn.Linear(
-            in_features=units_mlp[1], out_features=marks)
-        self.mark_time = nn.Linear(
-                in_features=self.encoding_size + self.input_size, out_features=units_mlp[1]
-            )
-        self.mark_activation = th.relu
         
-
+    '''
     def log_intensity(
             self,
             events: Events,
@@ -154,12 +135,10 @@ class SmurfTHP_DD(MCDecoder):
         delta_t = delta_t.unsqueeze(-1)
 
         
-        '''
-        inner_mark = th.tanh(self.m1(history_representations_mark)) * delta_t + self.m2(history_representations_mark)
-        inner_mark = th.tanh(inner_mark)
-        p_m = th.softmax(self.m3(inner_mark), dim=-1)        
-        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
-        '''
+        #inner_mark = th.tanh(self.m1(history_representations_mark)) * delta_t + self.m2#(history_representations_mark)
+        #inner_mark = th.tanh(inner_mark)
+        #p_m = th.softmax(self.m3(inner_mark), dim=-1)        
+        #p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
 
         history_times = th.cat((history_representations_mark, query_representations), dim=-1)
         p_m = th.softmax(
@@ -188,15 +167,84 @@ class SmurfTHP_DD(MCDecoder):
         artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
         
         return th.log(marked_intensity), intensity_mask, artifacts 
-    
+        '''
 
 
     
-    def get_mark_activation(self, mark_activation):
-        if mark_activation == 'relu':
-            mark_activation = th.relu
-        elif mark_activation == 'tanh':
-            mark_activation = th.tanh
-        elif mark_activation == 'sigmoid':
-            mark_activation = th.sigmoid
-        return mark_activation
+    def forward(self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None):
+        
+        (query_representations,
+         intensity_mask) = self.get_query_representations(
+            events=events,
+            query=query,
+            prev_times=prev_times,
+            prev_times_idxs=prev_times_idxs,
+            pos_delta_mask=pos_delta_mask,
+            is_event=is_event,
+            representations=representations, 
+            representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
+
+        intensity_mask = pos_delta_mask                                 # [B,T]
+        if representations_mask is not None:
+            history_representations_mask = take_2_by_2(
+                representations_mask, index=prev_times_idxs)            # [B,T]
+            intensity_mask = intensity_mask * history_representations_mask
+
+        b,l = query.shape
+        representations_time = representations[0:b,:,:]
+        representations_mark = representations[b:,:,:]
+
+        history_representations_time = take_3_by_2(                            
+            representations_time, index=prev_times_idxs)                   # [B,T,D]
+        history_representations_mark = take_3_by_2(                          
+            representations_mark, index=prev_times_idxs)
+
+        
+        prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
+        delta_t = query - prev_times
+        check_tensor(delta_t)
+        delta_t = delta_t.unsqueeze(-1)
+        
+        log_ground_intensity = self.log_ground_intensity(
+                                        query=query, 
+                                        prev_times=prev_times, 
+                                        history_representations=history_representations_time)
+        
+        log_mark_pmf = self.log_mark_pmf(
+                        delta_t=delta_t, 
+                        history_representations=history_representations_mark)
+
+        ground_intensity_integral = self.intensity_integral(
+                                                query=query, 
+                                                prev_times=prev_times,
+                                                prev_times_idxs=prev_times_idxs,
+                                                intensity_mask=intensity_mask,
+                                                representations=representations_time
+                                                )
+
+        
+        check_tensor(log_ground_intensity)
+        check_tensor(log_mark_pmf)
+        check_tensor(ground_intensity_integral * intensity_mask, positive=True)
+        
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h_t = history_representations_time[th.arange(batch_size), last_event_idx,:]
+        last_h_m = history_representations_mark[th.arange(batch_size), last_event_idx,:] #[B,D]
+        artifacts = {}
+        artifacts['last_h_t'] = last_h_t.detach().cpu().numpy()
+        artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
+
+
+        return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts

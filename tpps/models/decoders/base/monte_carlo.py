@@ -7,7 +7,7 @@ from typing import Optional, Tuple, Dict
 from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
 from tpps.models.base.process import Events
 from tpps.utils.stability import check_tensor
-
+from tpps.utils.index import take_3_by_2
 
 class MCDecoder(VariableHistoryDecoder, abc.ABC):
     """Decoder based on Monte Carlo method. Here, the intensity is specified,
@@ -89,6 +89,23 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
 
         """
         pass
+
+
+    @abc.abstractmethod
+    def log_ground_intensity(
+            self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None
+    ) -> Tuple[th.Tensor, th.Tensor, Dict]:
+        pass
+
 
     def forward(
             self,
@@ -181,3 +198,114 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
                 intensity_integrals,
                 intensity_mask,
                 artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
+    
+    '''
+    def forward(
+            self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None,
+            sampling: Optional[bool] = False
+    ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
+        """Compute the intensities for each query time given event
+        representations.
+
+        Args:
+            events: [B,L] Times and labels of events.
+            query: [B,T] Times to evaluate the intensity function.
+            prev_times: [B,T] Times of events directly preceding queries.
+            prev_times_idxs: [B,T] Indexes of times of events directly
+                preceding queries. These indexes are of window-prepended
+                events.
+            pos_delta_mask: [B,T] A mask indicating if the time difference
+                `query - prev_times` is strictly positive.
+            is_event: [B,T] A mask indicating whether the time given by
+                `prev_times_idxs` corresponds to an event or not (a 1 indicates
+                an event and a 0 indicates a window boundary).
+            representations: [B,L+1,D] Representations of each event.
+            representations_mask: [B,L+1] Mask indicating which representations
+                are well-defined. If `None`, there is no mask. Defaults to
+                `None`.
+            artifacts: A dictionary of whatever else you might want to return.
+
+        Returns:
+            log_intensity: [B,T,M] The intensities for each query time for
+                each mark (class).
+            intensity_integrals: [B,T,M] The integral of the intensity from
+                the most recent event to the query time for each mark.
+            intensities_mask: [B,T]   Which intensities are valid for further
+                computation based on e.g. sufficient history available.
+
+        """
+        marked_log_intensity, intensity_mask, artifacts = self.log_intensity(
+            events=events,
+            query=query,
+            prev_times=prev_times,
+            prev_times_idxs=prev_times_idxs,
+            pos_delta_mask=pos_delta_mask,
+            is_event=is_event,
+            representations=representations,
+            representations_mask=representations_mask,
+            artifacts=artifacts)  # [B,T,M], [B,T], dict
+        
+        
+
+        check_tensor(marked_log_intensity)
+        check_tensor(intensity_integrals * intensity_mask.unsqueeze(-1),
+                     positive=True)
+        return (marked_log_intensity,
+                intensity_integrals,
+                intensity_mask,
+                artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
+    '''
+
+    def intensity_integral(
+            self,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            intensity_mask:th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None
+            ):
+        
+        
+        # Create Monte Carlo samples and sort them
+        n_est = int(self.mc_prop_est)
+        mc_times_samples = th.rand(
+            query.shape[0], query.shape[1], n_est, device=query.device) * \
+            (query - prev_times).unsqueeze(-1) + prev_times.unsqueeze(-1)
+        mc_times_samples = th.sort(mc_times_samples, dim=-1).values
+        mc_times_samples = mc_times_samples.reshape(
+            mc_times_samples.shape[0], -1)  # [B, TxN]
+
+        prev_times_idxs=th.repeat_interleave(
+                prev_times_idxs, n_est, dim=-1)
+
+        history_representations = take_3_by_2(
+            representations, index=prev_times_idxs)                   # [B,T,D]
+        
+        mc_log_ground_intensity = self.log_ground_intensity(
+            query=mc_times_samples,
+            prev_times=th.repeat_interleave(prev_times, n_est, dim=-1),
+            history_representations=history_representations,
+            intensity_mask=th.repeat_interleave(intensity_mask, n_est, dim=-1))  # [B,TxN]
+
+        mc_log_ground_intensity = mc_log_ground_intensity.reshape(
+            query.shape[0], query.shape[1], n_est)  # [B,T,N]
+        
+        mc_log_ground_intensity = mc_log_ground_intensity * \
+            intensity_mask.unsqueeze(-1)  # [B,T,N]
+        ground_intensity_mc = th.exp(mc_log_ground_intensity)
+
+        ground_intensity_integrals = (query - prev_times) * \
+            ground_intensity_mc.sum(-1) / float(n_est)  # [B,T]
+        
+        return ground_intensity_integrals

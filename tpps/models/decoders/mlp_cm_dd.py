@@ -3,16 +3,18 @@ import torch.nn as nn
 
 from typing import List, Optional, Tuple, Dict
 
-from tpps.models.decoders.base.sep_cumulative import SepCumulativeDecoder
+from tpps.models.decoders.mlp_cm_jd import MLPCm_JD
 from tpps.models.base.process import Events
 
 from tpps.pytorch.models import MLP
 
 from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2
-from tpps.utils.stability import epsilon
+from tpps.utils.stability import epsilon, check_tensor
+from tpps.utils.nnplus import non_neg_param
 
-class MLPCm_DD(SepCumulativeDecoder):
+
+class MLPCm_DD(MLPCm_JD):
     """A mlp decoder based on the cumulative approach.
 
     Args:
@@ -63,39 +65,21 @@ class MLPCm_DD(SepCumulativeDecoder):
         input_size = units_mlp[0] - enc_size
         super(MLPCm_DD, self).__init__(
             name="mlp-cm-dd",
-            do_zero_subtraction=do_zero_subtraction,
+            n_mixture=n_mixture,
+            units_mlp=units_mlp,
+            activation_mlp=activation_mlp,
+            dropout_mlp=dropout_mlp,
+            constraint_mlp=constraint_mlp,
+            activation_final_mlp=activation_final_mlp,
             model_log_cm=model_log_cm,
-            input_size=input_size,
+            do_zero_subtraction=do_zero_subtraction,
             emb_dim=emb_dim,
             encoding=encoding,
             time_encoding=time_encoding,
             marks=marks,
+            mark_activation=mark_activation,
+            hist_time_grouping=hist_time_grouping,
             **kwargs)
-        units = units_mlp[1:-1] + [n_mixture]
-        self.mlp = MLP(
-            units=units,
-            activations=activation_mlp,
-            constraint=constraint_mlp,
-            dropout_rates=dropout_mlp,
-            # units_mlp in this class also provides the input dimensionality
-            # of the mlp
-            input_shape=units_mlp[0],
-            activation_final=activation_final_mlp)
-        self.marks2 = nn.Linear(
-            in_features=units_mlp[1], out_features=marks)
-        self.hist_time_grouping = hist_time_grouping
-        self.cond_ind = cond_ind
-        if self.hist_time_grouping == 'summation':
-            self.marks1 = nn.Linear(
-            in_features=self.input_size, out_features=units_mlp[1])
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size, out_features=units_mlp[1]
-            )
-        elif self.hist_time_grouping == 'concatenation':
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size + self.input_size, out_features=units_mlp[1]
-            )
-        self.mark_activation = self.get_mark_activation(mark_activation)
 
     def cum_intensity(
             self,
@@ -184,13 +168,167 @@ class MLPCm_DD(SepCumulativeDecoder):
 
         return ground_intensity_itg, p_m, intensity_mask, artifacts
 
-    def get_mark_activation(self, mark_activation):
-        if mark_activation == 'relu':
-            mark_activation = th.relu
-        elif mark_activation == 'tanh':
-            mark_activation = th.tanh
-        elif mark_activation == 'sigmoid':
-            mark_activation = th.sigmoid
-        return mark_activation
-    
-    
+
+    def forward(
+            self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[bool] = None, 
+            sampling: Optional[bool] = False
+    ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
+        """Compute the intensities for each query time given event
+        representations.
+
+        Args:
+            events: [B,L] Times and labels of events.
+            query: [B,T] Times to evaluate the intensity function.
+            prev_times: [B,T] Times of events directly preceding queries.
+            prev_times_idxs: [B,T] Indexes of times of events directly
+                preceding queries. These indexes are of window-prepended
+                events.
+            pos_delta_mask: [B,T] A mask indicating if the time difference
+                `query - prev_times` is strictly positive.
+            is_event: [B,T] A mask indicating whether the time given by
+                `prev_times_idxs` corresponds to an event or not (a 1 indicates
+                an event and a 0 indicates a window boundary).
+            representations: [B,L+1,D] Representations of each event.
+            representations_mask: [B,L+1] Mask indicating which representations
+                are well-defined. If `None`, there is no mask. Defaults to
+                `None`.
+            artifacts: A dictionary of whatever else you might want to return.
+
+        Returns:
+            log_intensity: [B,T,M] The intensities for each query time for
+                each mark (class).
+            intensity_integrals: [B,T,M] The integral of the intensity from
+                the most recent event to the query time for each mark.
+            intensities_mask: [B,T]   Which intensities are valid for further
+                computation based on e.g. sufficient history available.
+            artifacts: Some measures
+
+        """
+        # Add grads for query to compute derivative
+        query.requires_grad = True
+        
+        (query_representations,            
+         intensity_mask) = self.get_query_representations(
+            events=events,
+            query=query,
+            prev_times=prev_times,
+            prev_times_idxs=prev_times_idxs,
+            pos_delta_mask=pos_delta_mask,
+            is_event=is_event,
+            representations=representations,
+            representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
+
+        b,l = query.shape
+        representations_time = representations[0:b,:,:]
+        representations_mark = representations[b:,:,:]
+
+        history_representations_time = take_3_by_2(                            
+            representations_time, index=prev_times_idxs)                   # [B,T,D]
+        history_representations_mark = take_3_by_2(                          
+            representations_mark, index=prev_times_idxs)
+        
+        self.mu.data = non_neg_param(self.mu.data)
+        check_tensor(self.mu.data, positive=True)
+        
+        ground_intensity_integrals_q = self.cum_ground_intensity(
+                                    query_representations=query_representations,
+                                    history_representations=history_representations_time)
+
+        delta_t = query - prev_times                                  # [B,T]
+        delta_t = delta_t.unsqueeze(dim=-1)                           # [B,T,1]
+        poisson_term = self.mu * delta_t                # [B,T,M]
+        
+
+        ground_intensity_integrals_q = ground_intensity_integrals_q + poisson_term.squeeze(-1)
+
+        # Remove masked values and add epsilon for stability
+        ground_intensity_integrals_q = \
+            ground_intensity_integrals_q * intensity_mask
+
+        # Optional zero substraction
+        if self.do_zero_subtraction: #Computes Lambda(0)
+            
+            query_representations_z, intensity_mask_z = self.get_query_representations(
+                                        events=events,
+                                        query=prev_times,
+                                        prev_times=prev_times,
+                                        prev_times_idxs=prev_times_idxs,
+                                        pos_delta_mask=pos_delta_mask,
+                                        is_event=is_event,
+                                        representations=representations,
+                                        representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
+
+                        
+            ground_intensity_integrals_z = self.cum_ground_intensity(
+                                            query_representations=query_representations_z,
+                                            history_representations=history_representations_time)
+
+            ground_intensity_integrals_z = ground_intensity_integrals_z * intensity_mask_z
+             
+            ground_intensity_integrals_q = th.clamp(
+                ground_intensity_integrals_q - ground_intensity_integrals_z, min=0.
+            ) + ground_intensity_integrals_z 
+            
+            ground_intensity_integrals_q = ground_intensity_integrals_q + epsilon(
+                eps=1e-3,
+                dtype=ground_intensity_integrals_q.dtype,
+                device=ground_intensity_integrals_q.device) * query
+            
+            ground_intensity_integrals = ground_intensity_integrals_q - ground_intensity_integrals_z
+            
+            intensity_mask = intensity_mask * intensity_mask_z
+
+        else:
+            ground_intensity_integrals_q = ground_intensity_integrals_q + epsilon(
+                eps=1e-3,
+                dtype=ground_intensity_integrals_q.dtype,
+                device=ground_intensity_integrals_q.device) * query
+            
+            ground_intensity_integrals = ground_intensity_integrals_q
+
+        check_tensor(ground_intensity_integrals * intensity_mask,
+                     positive=True)
+        
+        ground_intensity = th.autograd.grad(
+            outputs=ground_intensity_integrals,
+            inputs=query,
+            grad_outputs=th.ones_like(ground_intensity_integrals),
+            retain_graph=True,
+            create_graph=True)[0]
+        query.requires_grad = False
+
+        check_tensor(ground_intensity * intensity_mask, positive=True)
+
+        log_ground_intensity = th.log(ground_intensity)
+        
+
+        log_mark_pmf = self.log_mark_pmf(
+                        query_representations=query_representations, 
+                        history_representations=history_representations_mark)
+        
+        check_tensor(log_mark_pmf * intensity_mask.unsqueeze(-1))
+
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h_t = history_representations_time[th.arange(batch_size), last_event_idx,:]
+        last_h_m = history_representations_mark[th.arange(batch_size), last_event_idx,:] #[B,D]
+        artifacts = {}
+        artifacts['last_h_t'] = last_h_t.detach().cpu().numpy()
+        artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
+            
+        return (log_ground_intensity,
+                log_mark_pmf,
+                ground_intensity_integrals, 
+                intensity_mask,
+                artifacts)  # [B,T,M], [B,T,M], [B,T], Dict

@@ -1,36 +1,44 @@
 #!/bin/bash
   
-#SBATCH --job-name=intensity
-#SBATCH --output=intensity_outputs/intensity2.out
+#SBATCH --job-name=intensity_thp
+#SBATCH --output=intensity_outputs/intensity_thp.out
 
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=10G
 #SBATCH --gres=gpu:1
 
 models=(
-    'gru_thp_temporal_with_labels_adjust_param_nodiv'
-    'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd_separate_nodiv'
+    #'gru_thp_temporal_with_labels'
+    #'gru_thp-jd_temporal_with_labels'
+    #'gru_temporal_with_labels_gru_temporal_with_labels_thp-dd'
 
-    'gru_sahp_temporal_with_labels_adjust_param'
-    'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd_separate'
+    'gru_sahp_temporal_with_labels'
+    #'gru_sahp-jd_temporal_with_labels'
+    #'gru_temporal_with_labels_gru_temporal_with_labels_sahp-dd'
 
-    'poisson_gru_mlp-cm_temporal_with_labels_adjust_param'
-    'poisson_gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd_separate'
+    #'gru_mlp-cm_temporal_with_labels'
+    #'gru_mlp-cm-jd_temporal_with_labels'
+    #'gru_temporal_with_labels_gru_temporal_with_labels_mlp-cm-dd'
 
-    'gru_log-normal-mixture_temporal_with_labels_adjust_param'
-    'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd_separate'
+    #'gru_log-normal-mixture_temporal_with_labels'
+    #'gru_log-normal-mixture-jd_temporal_with_labels'
+    #'gru_temporal_with_labels_gru_temporal_with_labels_log-normal-mixture-dd'
 
-    'gru_rmtpp_temporal_with_labels_adjust_param'
-    'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd_separate'
+    #'gru_rmtpp_temporal_with_labels'
+    #'gru_rmtpp-jd_temporal_with_labels'
+    #'gru_temporal_with_labels_gru_temporal_with_labels_rmtpp-dd'
 )
 
 for model in ${models[@]}; do
-    python3 -u intensity/plot_intensity.py \
-    --dataset 'hawkes_exponential_mutual_large' \
-    --load-from-dir 'data/baseline3' \
-    --split 0 \
-    --save-check-dir 'checkpoints/icml/hawkes_exponential_mutual_large' \
-    --model-name $model \
-    --batch-size 1 \
-    --seed 2
+    for split in {0..2}; do
+        python3 -u intensity/plot_intensity.py \
+        --dataset 'hawkes_exponential_mutual_large' \
+        --load-from-dir 'data/baseline3' \
+        --split $split \
+        --save-check-dir 'checkpoints/neurips2/hawkes_exponential_mutual_large' \
+        --model-name $model \
+        --batch-size 1 \
+        --seed $((50 + $split)) \
+        --n-seq 200
+    done 
 done 

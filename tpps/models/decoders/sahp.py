@@ -74,15 +74,10 @@ class SAHP(MCDecoder):
 
     def log_intensity(
             self,
-            events: Events,
             query: th.Tensor,
             prev_times: th.Tensor,
-            prev_times_idxs: th.Tensor,
-            pos_delta_mask: th.Tensor,
-            is_event: th.Tensor,
-            representations: th.Tensor,
-            representations_mask: Optional[th.Tensor] = None,
-            artifacts: Optional[dict] = None
+            history_representations: th.Tensor, 
+            intensity_mask: th.Tensor
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
         """Compute the log_intensity and a mask
 
@@ -113,6 +108,53 @@ class SAHP(MCDecoder):
 
         """
         
+        mu = self.activation(self.mu(history_representations)) #[B,T,K]
+        eta = self.activation(self.eta(history_representations))
+        gamma = self.activation_gamma(self.gamma(history_representations))
+        check_tensor(gamma, positive=True)
+        delta_t = (query - prev_times) * intensity_mask
+
+        delta_t = delta_t + epsilon(dtype=delta_t.dtype, device=delta_t.device)
+        delta_t = delta_t.unsqueeze(-1)
+
+        outputs = mu + (eta -mu)*th.exp(-gamma*(delta_t)) #[B,T,K]
+        outputs = self.final_activation(outputs)
+
+        outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
+        check_tensor(outputs, positive=True)
+        
+        return th.log(outputs)
+    
+
+    def log_ground_intensity(self,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            history_representations: th.Tensor,
+            intensity_mask:th.Tensor):
+
+        log_marked_intensity = self.log_intensity(
+                                        query=query,
+                                        prev_times=prev_times,
+                                        history_representations=history_representations,
+                                        intensity_mask=intensity_mask)
+
+        ground_intensity = th.sum(th.exp(log_marked_intensity), dim=-1)
+
+        return th.log(ground_intensity)
+
+
+
+    def forward(self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None):
+    
         intensity_mask = pos_delta_mask                                 # [B,T]
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
@@ -122,29 +164,33 @@ class SAHP(MCDecoder):
         history_representations = take_3_by_2(
             representations, index=prev_times_idxs)                   # [B,T,D]
 
-        mu = self.activation(self.mu(history_representations)) #[B,T,K]
-        eta = self.activation(self.eta(history_representations))
-        gamma = self.activation_gamma(self.gamma(history_representations))
-        check_tensor(gamma, positive=True)
-        delta_t = (query - prev_times) * pos_delta_mask
-        #delta_t = (query - prev_times)
-
-        delta_t = delta_t + epsilon(dtype=delta_t.dtype, device=delta_t.device)
-        delta_t = delta_t.unsqueeze(-1)
-
-        outputs = mu + (eta -mu)*th.exp(-gamma*(delta_t)) #[B,T,K]
-        #if th.isinf(th.exp(-gamma*(delta_t))).sum() != 0:
-        #    print(delta_t)
-        #check_tensor(th.exp(-gamma*(delta_t)))
-        #check_tensor(mu)
-        #check_tensor(eta)
-        outputs = self.final_activation(outputs)
-
-        outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
-        check_tensor(outputs, positive=True)
+        log_marked_intensity = self.log_intensity(
+                                                query=query,
+                                                prev_times=prev_times,
+                                                history_representations=history_representations,
+                                                intensity_mask=intensity_mask)
         
-        #print(outputs.sum(-1))
-        #delta = outputs.sum(-1)[:,:-1:]-outputs[:,1:,:].sum(-1) 
-        #print(delta)
-        #check_tensor(delta, positive=True)
-        return th.log(outputs), intensity_mask, artifacts 
+        marked_intensity = th.exp(log_marked_intensity)
+
+        ground_intensity = th.sum(marked_intensity, dim=-1)
+        log_ground_intensity = th.log(ground_intensity)
+        
+        mark_pmf = marked_intensity / ground_intensity.unsqueeze(-1)
+        log_mark_pmf = th.log(mark_pmf)
+
+        ground_intensity_integral = self.intensity_integral(
+                                            query=query, 
+                                            prev_times=prev_times,
+                                            prev_times_idxs=prev_times_idxs,
+                                            intensity_mask=intensity_mask,
+                                            representations=representations)
+                                            
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h = history_representations[th.arange(batch_size), last_event_idx,:]
+        artifacts = {}
+        artifacts['last_h'] = last_h.detach().cpu().numpy()
+
+        return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts

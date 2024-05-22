@@ -13,16 +13,20 @@ from tick.hawkes import SimuHawkesSumExpKernels, SimuHawkesMulti, SimuHawkesExpK
 from data_processing.tick_plot_process import plot_point_process, _extract_process_interval
 
     
-def initialize_kernel(kernel_name, marks, baselines, window, 
-                    decays=None, self_decays=None, mutual_decays=None, adjacency=None, self_adjacency=None, mutual_adjacency=None, noise=None, seed=None):
+def initialize_kernel(args):
     artifacts = {}
-    if kernel_name in ['hawkes_exponential_mutual', 'hawkes_exponential_independent']:
-        if decays is None:
-            decays = [[self_decays[i] if i == j else mutual_decays[0] for i in range(marks)] for j in range(marks)]
-        if adjacency is None:
-            adjacency = [[self_adjacency[i] if i == j else mutual_adjacency[0] for i in range(marks)] for j in range(marks)]
-        kernel = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baselines, end_time=window, verbose=False, seed=seed)
-    elif kernel_name in ['hawkes_sum_exponential_mutual', 'hawkes_sum_exponential_independent']:
+    if args.kernel_name in ['hawkes_exponential_mutual', 'hawkes_exponential_independent']:
+        if len(args.decays) == 0:
+            decays = [[args.self_decays[i] if i == j else args.mutual_decays[0] for i in range(args.marks)] for j in range(args.marks)]
+        else:
+            decays = args.decays
+        if len(args.adjacency) == 0:
+            adjacency = [[args.self_adjacency[i] if i == j else args.mutual_adjacency[0] for i in range(args.marks)] for j in range(args.marks)]
+        else:
+            adjacency = args.adjacency
+        kernel = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=args.baselines, end_time=args.window, verbose=False, seed=args.seed)
+    elif args.kernel_name in ['hawkes_sum_exponential_mutual', 'hawkes_sum_exponential_independent']:
+        '''
         if decays is None:
             decays = np.array(self_decays)
         if adjacency is None: #Problem if decay matrix is specified, but not adjacency one.
@@ -33,8 +37,9 @@ def initialize_kernel(kernel_name, marks, baselines, window,
             adjacency_mask = np.repeat(adjacency_mask[:, :, np.newaxis], decays.shape[0] , axis=2)
             if noise is not None:
                 adj_noise = np.random.uniform(0, noise, adjacency.shape) * adjacency_mask
-                adjacency = adjacency + adj_noise 
-        kernel = SimuHawkesSumExpKernels(adjacency=adjacency, decays=decays, baseline=baselines, end_time=window, verbose=False, seed=seed)
+        '''
+        kernel = SimuHawkesSumExpKernels(adjacency=args.adjacency, decays=args.decays, baseline=args.baselines, end_time=args.window, verbose=False, seed=args.seed)
+        
     if kernel.spectral_radius() >= 1:
         print(kernel.spectral_radius())
         kernel.adjust_spectral_radius(0.99)
@@ -44,24 +49,24 @@ def initialize_kernel(kernel_name, marks, baselines, window,
     artifacts['baselines'] = kernel.baseline.tolist()
     return kernel, artifacts
 
-def simulate_process(kernel_name, window, n_seq,
-                      marks, baselines, self_decays=None, mutual_decays=None, self_adjacency=None, 
-                     mutual_adjacency=None, track_intensity=False, decays=None, adjacency=None, noise=None, seed=None):
-    if decays is None:
-        assert(self_decays is not None and mutual_decays is not None), 'Either specify self decays and mutual decays, or overall decays, but not both.'
-    if adjacency is None:
-        assert(self_adjacency is not None and mutual_adjacency is not None), 'Either specify self adjacency and mutual adjacency, or overall adjacency, but not both.'
-    kernel, artifacts = initialize_kernel(kernel_name=kernel_name, marks=marks, self_decays=self_decays, mutual_decays=mutual_decays, 
-                                          self_adjacency=self_adjacency, mutual_adjacency=mutual_adjacency, baselines=baselines, window=window,
-                                          decays=decays, adjacency=adjacency, noise=noise, seed=seed)
+def simulate_process(args, track_intensity=False):
+    #if decays is None:
+    #    assert(self_decays is not None and mutual_decays is not None), 'Either specify self decays and mutual #decays, or overall decays, but not both.'
+    #if adjacency is None:
+    #    assert(self_adjacency is not None and mutual_adjacency is not None), 'Either specify self adjacency #and mutual adjacency, or overall adjacency, but not both.'
+    kernel, artifacts = initialize_kernel(args)
     if track_intensity:
         dt = 0.001
         kernel.track_intensity(dt)
-    if n_seq is None:
-        n_seq = n_seq_train + n_seq_val + n_seq_cal + n_seq_test
-    process = SimuHawkesMulti(kernel, n_simulations=n_seq)
-    process.end_time = [window] * n_seq  
+    if args.n_seq is None:
+        n_seq = args.n_seq_train + args.n_seq_val + args.n_seq_cal + args.n_seq_test
+    else:
+        n_seq = args.n_seq
+    process = SimuHawkesMulti(kernel, n_simulations=n_seq, n_threads=-1)
+    process.end_time = [args.window] * n_seq  
+    print('Simulating...')
     process.simulate()
+    print('Simulation complete!')
     return process, artifacts
 
 
@@ -129,21 +134,8 @@ def plot_process_multi_axes(timestamps, axes, labels_idx=None, marked=True):
         axes.scatter(timestamps[0], y_point_pos, s=100)
     return axes
 
-def simulate_seqs(args:Namespace, n_seq=1):
-    if 'self_decays' not in vars(args):
-        process, artifacts = simulate_process(kernel_name=args.kernel_name, window=args.window,
-                                            n_seq=n_seq, marks=args.marks, baselines=args.baselines, 
-                                            decays=args.decays, 
-                                            adjacency=args.adjacency, 
-                                            track_intensity=True,
-                                            seed=args.seed)
-    else:
-        process, artifacts = simulate_process(kernel_name=args.kernel_name, window=args.window, 
-                                            n_seq=n_seq, marks=args.marks, self_decays=args.self_decays, 
-                                            mutual_decays=args.mutual_decays, 
-                                            baselines=args.baselines, self_adjacency=args.self_adjacency, 
-                                            mutual_adjacency=args.mutual_adjacency, track_intensity=True,
-                                            seed=args.seed)
+def simulate_seqs(args:Namespace):
+    process, artifacts = simulate_process(args, track_intensity=True)
     all_process = process._simulations
     marked_intensities, ground_intensities, mark_pmfs, intensity_timess, sequences = [], [], [], [], []
     for process in all_process:

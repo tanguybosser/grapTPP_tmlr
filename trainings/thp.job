@@ -98,6 +98,7 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'retweets' --load-from-dir 'd
 done
 "
 
+: "
 ##Stack
 
 for split in {0..2}
@@ -114,6 +115,7 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow' --load-from-
 --decoder-hist-time-grouping 'concatenation' \
 --decoder-mc-prop-est 50
 done
+"
 
 : "
 ##Hawkes

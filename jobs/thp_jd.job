@@ -1,19 +1,19 @@
 #!/bin/bash
   
 #SBATCH --job-name=thp_jd
-#SBATCH --output=neurips_output/thp_jd_cos.out
+#SBATCH --output=neurips_output/thp_jd_hawkes.out
 
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=10G
 #SBATCH --gres=gpu:1
 
-
+: "
 ##LastFM
 
-for split in 0
+for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/lastfm_filtered' --save-check-dir 'checkpoints/neurips/lastfm_filtered' \
+--save-results-dir 'results/gradients/lastfm_filtered' --save-check-dir 'checkpoints/gradients/lastfm_filtered' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -24,16 +24,15 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from
 --decoder-hist-time-grouping 'concatenation' \
 --separate-training False \
 --decoder-mc-prop-est 50 \
---train-epochs 20 
+--train-epochs 50 
 done
 
-: "
 ##MOOC
 
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/mooc_filtered' --save-check-dir 'checkpoints/neurips/mooc_filtered' \
+--save-results-dir 'results/gradients/mooc_filtered' --save-check-dir 'checkpoints/gradients/mooc_filtered' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 32 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -47,12 +46,33 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'mooc_filtered' --load-from-d
 --train-epochs 50 
 done
 
+
+##Stack
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/gradients/stack_overflow_filtered' --save-check-dir 'checkpoints/gradients/stack_overflow_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
+done
+
+
 ##Github
 
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'github_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/github_filtered' --save-check-dir 'checkpoints/neurips/github_filtered' \
+--save-results-dir 'results/gradients/github_filtered' --save-check-dir 'checkpoints/gradients/github_filtered' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -71,8 +91,108 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'reddit_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/reddit_filtered_short' --save-check-dir 'checkpoints/neurips/reddit_filtered_short' \
+--save-results-dir 'results/gradients/reddit_filtered_short' --save-check-dir 'checkpoints/gradients/reddit_filtered_short' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
+done
+"
+
+# Hawkes 
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual_large' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/gradients/hawkes_exponential_mutual_large' --save-check-dir 'checkpoints/gradients/hawkes_exponential_mutual_large' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 16 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--loss-relative-tolerance 0
+done
+
+
+: "
+## Wikipedia 
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'wikipedia_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/gradients/wikipedia_filtered' --save-check-dir 'checkpoints/gradients/wikipedia_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 16 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
+done
+
+
+
+# Hawkes - 5
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual_large' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/gradients/hawkes_exponential_mutual_large' --save-check-dir 'checkpoints/gradients/hawkes_exponential_mutual_large' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 16 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50
+done
+
+# Hawkes - 50
+
+for split in {0..2}
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_sum_exponential_mutual' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/gradients/hawkes_sum_exponential_mutual' --save-check-dir 'checkpoints/gradients/hawkes_sum_exponential_mutual' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 16 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp-jd' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 50 
+done
+
+# Hawkes 
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/gradients/hawkes_exponential_mutual' --save-check-dir 'checkpoints/gradients/hawkes_exponential_mutual' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 16 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
 --encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
@@ -90,7 +210,7 @@ done
 for split in {0..2}
 do
 python3 -u scripts/train2.py --no-mlflow --dataset 'retweets_filtered_short' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/retweets_filtered_short' --save-check-dir 'checkpoints/neurips/retweets_filtered_short' \
+--save-results-dir 'results/gradients/retweets_filtered_short' --save-check-dir 'checkpoints/gradients/retweets_filtered_short' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -104,12 +224,12 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'retweets_filtered_short' --l
 --train-epochs 50 
 done
 
-##Stack
+## Amazon Movies 
 
 for split in {0..2}
 do
-python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/stack_overflow_filtered' --save-check-dir 'checkpoints/neurips/stack_overflow_filtered' \
+python3 -u scripts/train2.py --no-mlflow --dataset 'amazon_movies' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/gradients/amazon_movies' --save-check-dir 'checkpoints/gradients/amazon_movies' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -122,15 +242,14 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'stack_overflow_filtered' --l
 --decoder-mc-prop-est 50 \
 --train-epochs 50 
 done
-"
 
-: "
-# Hawkes
 
-for split in 0
+## Amazon Toys
+
+for split in {1..2}
 do
-python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' --load-from-dir '../neuralTPPs/data/baseline3' \
---save-results-dir 'results/neurips/hawkes_exponential_mutual' --save-check-dir 'checkpoints/neurips/hawkes_exponential_mutual' \
+python3 -u scripts/train2.py --no-mlflow --dataset 'amazon_toys' --load-from-dir 'data/baseline3' \
+--save-results-dir 'results/gradients/amazon_toys' --save-check-dir 'checkpoints/gradients/amazon_toys' \
 --eval-metrics True --include-poisson False --patience 50 --batch-size 8 --split $split \
 --encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
 --encoder-units-rnn 42 --encoder-layers-rnn 1 \
@@ -144,7 +263,5 @@ python3 -u scripts/train2.py --no-mlflow --dataset 'hawkes_exponential_mutual' -
 --train-epochs 50 
 done
 "
-
-
 
 

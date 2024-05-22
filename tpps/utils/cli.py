@@ -295,7 +295,7 @@ def parse_args(allow_unknown=False):
     parser.add_argument("--decoder-mark-activation", type=str, default='relu',
                         choices=['relu', 'tanh', 'sigmoid'],
                         help="Inner activation of the mark distribution. Either 'relu', 'tanh', 'sigmoid'")
-    parser.add_argument("--decoder-hist-time-grouping", type=str, default='summation',
+    parser.add_argument("--decoder-hist-time-grouping", type=str, default='concatenation',
                         choices=['summation', 'concatenation'],
                         help="Grouping of history and event time embeddings in the computation of the mark pmf.")
     parser.add_argument("--decoder-cond-ind", type=lambda x: bool(strtobool(x)), default=False,
@@ -364,6 +364,9 @@ def parse_args(allow_unknown=False):
     parser.add_argument("--separate-training", 
                          type=lambda x: bool(strtobool(x)), default=False,
                          help='If True, trains the NLL-T and NLL-M terms separately.')
+    parser.add_argument("--include-window", 
+                         type=lambda x: bool(strtobool(x)), default=True,
+                         help='Include window during training')
     #Eval
     parser.add_argument("--model-name", 
                          type=str, default=None,
@@ -404,7 +407,10 @@ def parse_args(allow_unknown=False):
     parser.add_argument("--conformalizers", type=str, default=[], nargs='+', 
                          help="Methods to use for conformal prediction.")
     parser.add_argument("--run-type", type=str, default='conformal',
-                        help='If cumulative, shows the cdf for the last events of a given dataset.') 
+                        help='If cumulative, shows the cdf for the last events of a given dataset.')
+    #Simulation 
+    parser.add_argument("--n-seq", type=int, default=10,
+                        help='Number of sequences to simulate') 
     if allow_unknown:
         args = parser.parse_known_args()[0]
     else:

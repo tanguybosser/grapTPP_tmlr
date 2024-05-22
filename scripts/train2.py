@@ -4,7 +4,7 @@ from cmath import exp, log
 from logging.config import valid_ident
 from unittest import result
 import sys, os
-sys.path.append(os.path.abspath(os.path.join('..', 'icml')))
+sys.path.append(os.path.abspath(os.path.join('..', 'neurips')))
 
 import pdb
 import json
@@ -21,6 +21,7 @@ import torch as th
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
+from torch.linalg import vector_norm
 
 from argparse import Namespace
 from copy import deepcopy
@@ -67,8 +68,7 @@ def get_loss(
     events = get_events(
         times=times, mask=mask, labels=labels,
         window_start=window_start, window_end=window_end)
-    loss_t, loss_m, loss_w, loss_mask, artifacts = model.neg_log_likelihood(events=events,
-                                                        test=test,loss=args.loss, training_type= args.training_type)  # [B]
+    loss_t, loss_m, loss_w, loss_mask, artifacts = model.neg_log_likelihood(events=events, test=test)  # [B]
     if eval_metrics:
         events_times = events.get_times()
         log_p, log_mark_density, y_pred_mask = model.log_density(
@@ -165,14 +165,14 @@ def evaluate(model: Process, args: Namespace, loader: DataLoader, test: Optional
             #all_log_mark_density_per_seq.extend(log_mark_density_per_seq)
             #all_log_density_per_seq.extend(log_density_per_seq)
             #n_valid_events.append(int(artifacts['n valid events']))
-        log_time_density = artifacts['true log density'] * loss_mask
-        log_mark_density = artifacts['true mark density'] * loss_mask
-        log_mark_intensity = artifacts['log mark intensity'] * loss_mask
-        window_integral = artifacts['window integral'] * loss_mask
-        epoch_log_time_density += detach(th.sum(log_time_density))
-        epoch_log_mark_density += detach(th.sum(log_mark_density))
-        epoch_window_integral += detach(th.sum(window_integral))
-        epoch_log_marked_intensity += detach(th.sum(log_mark_intensity))
+        #log_time_density = artifacts['true log density'] * loss_mask
+        #log_mark_density = artifacts['true mark density'] * loss_mask
+        #log_mark_intensity = artifacts['log mark intensity'] * loss_mask
+        #window_integral = artifacts['window integral'] * loss_mask
+        #epoch_log_time_density += detach(th.sum(log_time_density))
+        #epoch_log_mark_density += detach(th.sum(log_mark_density))
+        #epoch_window_integral += detach(th.sum(window_integral))
+        #epoch_log_marked_intensity += detach(th.sum(log_mark_intensity))
         '''
         if 'alpha' in artifacts:
             epoch_intensity_0 += detach(th.sum(artifacts['intensity_0'] * loss_mask))
@@ -220,10 +220,10 @@ def evaluate(model: Process, args: Namespace, loader: DataLoader, test: Optional
     results['loss_t'] = float(epoch_loss_t / n_seqs)
     results['loss_m'] = float(epoch_loss_m / n_seqs)
     results['loss_w'] = float(epoch_loss_w / n_seqs)
-    results["log ground density"] = float(epoch_log_time_density/n_seqs)
-    results["log mark density"] = float(epoch_log_mark_density/n_seqs)
-    results["window integral"] = float(epoch_window_integral/n_seqs)
-    results["log mark intensity"] = float(epoch_log_marked_intensity/n_seqs)
+    #results["log ground density"] = float(epoch_log_time_density/n_seqs)
+    #results["log mark density"] = float(epoch_log_mark_density/n_seqs)
+    #results["window integral"] = float(epoch_window_integral/n_seqs)
+    #results["log mark intensity"] = float(epoch_log_marked_intensity/n_seqs)
     if test:
         results["cdf"] = cumulative_density
         '''
@@ -292,6 +292,8 @@ def train(
         epochs = tqdm(epochs)
     t_start = time.time()
     epoch_dot_products = {k:[] for k,_ in model.named_parameters()}
+    epoch_grad_sim = {k:[] for k,_ in model.named_parameters()}
+    epoch_grad_ind = {k:[] for k,_ in model.named_parameters()}
     for j, epoch in enumerate(epochs):
         t0, _ = time.time(), model.train()
         #if args.lr_scheduler != 'plateau':
@@ -302,6 +304,8 @@ def train(
         epoch_log_mark_intensity = 0
         time_grads, mark_grads = defaultdict(), defaultdict()
         dot_products = {k:[] for k,_ in model.named_parameters()}
+        grad_sim = {k:[] for k,_ in model.named_parameters()}
+        grad_ind = {k:[] for k,_ in model.named_parameters()}
         for i, batch in enumerate((tqdm(loader)) if args.verbose else loader):
             batch['times'], batch['labels'], batch['seq_lens'] = batch['times'].to(args.device), batch['labels'].to(args.device), batch['seq_lens'].to(args.device)
             optimizer.zero_grad()
@@ -318,10 +322,34 @@ def train(
             #########
             #Identify shared layers (i.e. thp)
             #
-            loss_time.backward(retain_graph=True)
+            '''
+            loss_mark.backward(retain_graph=True)
             for name, p in model.named_parameters():
                 if p.requires_grad:
-                    time_grads[name] = p.grad.data.detach().clone().cpu().view(-1)
+                    if p.grad is None:
+                        grad = th.zeros_like(p.data, device='cpu').detach().view(-1)
+                    else:
+                        grad = p.grad.data.detach().clone().cpu().view(-1)
+                    mark_grads[name] = grad
+            loss_time.backward()
+            for name, p in model.named_parameters():
+                if p.requires_grad:
+                    #Grads are accumulated, so we must subtract the time grads to get the mark grads. 
+                    time_grads[name] = p.grad.data.detach().clone().cpu().view(-1) - mark_grads[name]
+            
+            '''
+            loss_time.backward(retain_graph=True)
+            for name, p in model.named_parameters():
+                if p.requires_grad:            
+                    if p.grad is None:
+                        grad = th.zeros_like(p.data, device='cpu').detach().view(-1)
+                    else:
+                        #if not th.isfinite(p.grad).all():
+                        #    print('Infinite gradient encoutered', name, p.grad)
+                        #if name == 'decoder.w':
+                        #    print('grad', p.grad.data)
+                        grad = p.grad.data.detach().clone().cpu().view(-1)
+                    time_grads[name] = grad
             loss_mark.backward()
             for name, p in model.named_parameters():
                 if p.requires_grad:
@@ -330,6 +358,12 @@ def train(
             for k in time_grads.keys():
                 g_t = time_grads[k]
                 g_m = mark_grads[k]
+                norm_g_t = vector_norm(g_t, ord=2)
+                norm_g_m = vector_norm(g_m, ord=2)
+                ind = int(norm_g_m < norm_g_t)
+                #Gradient magnitude similarity. 
+                gms = (2 * vector_norm(g_t, ord=2) * vector_norm(g_m, ord=2))
+                gms = gms/(th.square(vector_norm(g_t, ord=2)) + th.square(vector_norm(g_m, ord=2)))                
                 #Avoids numerical instabilities 
                 g_t[th.abs(g_t) < 1e-6] = 0
                 g_m[th.abs(g_m) < 1e-6] = 0
@@ -340,7 +374,9 @@ def train(
                 g_t = F.normalize(g_t, dim=0)
                 g_m = F.normalize(g_m, dim=0)
                 dot = float((g_t * g_m).sum(dim=0))
-                dot_products[k].append(dot)  
+                dot_products[k].append(dot)
+                grad_sim[k].append(float(gms))
+                grad_ind[k].append(ind)
                 ##########
             optimizer.step()
 
@@ -349,23 +385,23 @@ def train(
             epoch_loss_window += detach(loss_w)
             epoch_loss += epoch_loss_time + epoch_loss_mark + epoch_loss_window
             n_seqs += detach(th.sum(loss_mask))
-            log_time_density = artifacts['true log density'] * loss_mask
-            log_mark_density = artifacts['true mark density'] * loss_mask
-            window_integral = artifacts['window integral'] * loss_mask
-            log_mark_intensity = artifacts['log mark intensity'] * loss_mask
-            epoch_log_time_density += detach(th.sum(log_time_density))
-            epoch_log_mark_density += detach(th.sum(log_mark_density))
-            epoch_window_integral += detach(th.sum(window_integral))
-            epoch_log_mark_intensity += detach(th.sum(log_mark_intensity))
+            #log_time_density = artifacts['true log density'] * loss_mask
+            #log_mark_density = artifacts['true mark density'] * loss_mask
+            #window_integral = artifacts['window integral'] * loss_mask
+            #log_mark_intensity = artifacts['log mark intensity'] * loss_mask
+            #epoch_log_time_density += detach(th.sum(log_time_density))
+            #epoch_log_mark_density += detach(th.sum(log_mark_density))
+            #epoch_window_integral += detach(th.sum(window_integral))
+            #epoch_log_mark_intensity += detach(th.sum(log_mark_intensity))
         train_metrics['dur'] = time.time() - t0
         train_metrics['loss'] = float(epoch_loss/n_seqs)
         train_metrics['loss_t'] = float(epoch_loss_time/n_seqs)
         train_metrics['loss_m'] = float(epoch_loss_mark/n_seqs)
         train_metrics['loss_w'] = float(epoch_loss_window/n_seqs)
-        train_metrics["log ground density"] = float(epoch_log_time_density/n_seqs)
-        train_metrics["log mark density"] = float(epoch_log_mark_density/n_seqs)
-        train_metrics["window integral"] = float(epoch_window_integral/n_seqs)
-        train_metrics["log mark intensity"] = float(epoch_log_mark_intensity/n_seqs)
+        #train_metrics["log ground density"] = float(epoch_log_time_density/n_seqs)
+        #train_metrics["log mark density"] = float(epoch_log_mark_density/n_seqs)
+        #train_metrics["window integral"] = float(epoch_window_integral/n_seqs)
+        #train_metrics["log mark intensity"] = float(epoch_log_mark_intensity/n_seqs)
         train_metrics_list.append(train_metrics)
         val_metrics = evaluate(model, args=args, loader=val_loader, test=False, eval_met=False)
         val_dur.append(val_metrics["dur"])
@@ -374,7 +410,8 @@ def train(
         
         for k, v in dot_products.items():
             epoch_dot_products[k].extend(v) 
-        
+            epoch_grad_sim[k].extend(grad_sim[k])
+            epoch_grad_ind[k].extend(grad_ind[k])
         #Early stopping
         if not args.separate_training:
             if new_best:
@@ -426,7 +463,7 @@ def train(
         else:
             lr_poisson = lr
                
-    train_metrics_list.append({'dot_products':epoch_dot_products})
+    train_metrics_list.append({'dot_products':epoch_dot_products, 'grad_sim':epoch_grad_sim, 'grad_ind': epoch_grad_ind})
     model = set_model_state(args, model, best_state, best_state_time, best_state_mark)
 
     delta_t = time.time() - t_start
@@ -452,7 +489,7 @@ def set_model_state(args, model, best_state, best_state_time, best_state_mark):
 def early_stopping(val_metrics, best_loss, best_loss_time, best_loss_mark, args):
     if not args.separate_training: 
         new_best_time, new_best_mark = True, True
-        val_loss = -val_metrics['log ground density'] - val_metrics['log mark density'] - val_metrics['window integral']
+        val_loss = val_metrics['loss_t'] + val_metrics['loss_m'] + val_metrics['loss_w']
         new_best = val_loss < best_loss
         if args.loss_relative_tolerance is not None:
             abs_rel_loss_diff = (val_loss - best_loss) / best_loss
@@ -461,8 +498,8 @@ def early_stopping(val_metrics, best_loss, best_loss_time, best_loss_mark, args)
                                             args.loss_relative_tolerance)
             new_best = new_best and above_numerical_tolerance
     else:
-        val_loss_time = -val_metrics['log ground density']- val_metrics['window integral']
-        val_loss_mark = -val_metrics['log mark density']
+        val_loss_time = val_metrics['loss_t'] + val_metrics['loss_w']
+        val_loss_mark = val_metrics['loss_m']
         new_best_time = val_loss_time < best_loss_time
         new_best_mark = val_loss_mark < best_loss_mark
         new_best = True
@@ -627,6 +664,8 @@ if __name__ == "__main__":
     if cuda:
         parsed_args.device = th.device('cuda')
     else:
-        parsed_args.device = th.device('cpu')
+        parsed_args.device = th.device('cpu')        
+    if not parsed_args.include_window:
+        parsed_args.window = None  
     make_deterministic(seed=parsed_args.seed)
     main(args=parsed_args)

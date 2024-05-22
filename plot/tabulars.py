@@ -134,24 +134,36 @@ def get_dividing_NLL_constant(results_dic):
         constant_per_dataset[dataset] = nll_max
     return constant_per_dataset
 
-def get_mean_std(results_dic, int_to_str=True):
+def get_mean_std(results_dic, int_to_str=True, std=True):
     for k1, v1 in results_dic.items():
         for k2, v2 in v1.items():
             means = []
             for i, model_res in enumerate(v2):
                 model_res = np.array(model_res)
                 mean = np.mean(model_res)
-                std = np.std(model_res)
-                ste = std/np.sqrt(len(model_res))
+                std_val = np.std(model_res)
+                ste = std_val/np.sqrt(len(model_res))
                 if int_to_str:
-                    if 'NNL' in k2:
-                        means.append('{} ({})'.format(round(mean, 2), round(ste, 2)))
+                    if 'NLL' in k2:
+                        if std:
+                            means.append('{} ({})'.format(round(mean, 1), round(ste, 1)))
+                        else:
+                            means.append('{}'.format(round(mean, 2)))
                     elif 'C.' in k2:
-                        means.append('{} ({})'.format(format(mean,'.1E'), format(std, '.1E')))
+                        if std: 
+                            means.append('{} ({})'.format(format(mean,'.1E'), format(std, '.1E')))
+                        else:
+                            means.append('{}'.format(format(mean,'.1E')))
                     elif 'D.' in k2:
-                        means.append('{} ({})'.format(format(mean,'.1E'), format(std, '.1E')))
+                        if std:
+                            means.append('{} ({})'.format(format(mean,'.1E'), format(std, '.1E')))
+                        else:
+                            means.append('{}'.format(format(mean,'.1E')))
                     else:
-                        means.append('{} ({})'.format(round(mean, 3), round(ste, 3)))
+                        if std:
+                            means.append('{} ({})'.format(round(mean, 2), round(ste, 2)))
+                        else:
+                            means.append('{}'.format(round(mean, 3)))
                 else:
                     means.append(mean)
             results_dic[k1][k2] = means
@@ -207,7 +219,7 @@ def initialize_results_dic(result_type, n_m, datasets):
                                     } 
     return all_dic_dataset
 
-def get_test_loss_results_v4(results_dir, datasets, models, result_type='marked', n_s=5, to_rank=False, return_dic=False, per_dataset=False, return_ranked_dic=False):
+def get_test_loss_results_v4(results_dir, datasets, models, result_type='marked', n_s=5, to_rank=False, return_dic=False, per_dataset=False, return_ranked_dic=False, std=True):
     assert(result_type in ['marked', 'unmarked', 'simu']), 'result_ must be marked, unmarked or simu'
     simu = True if result_type == 'simu' else False
     n_m = len(models) 
@@ -257,10 +269,10 @@ def get_test_loss_results_v4(results_dir, datasets, models, result_type='marked'
                             path = os.path.join(file_dir_un, file_name)
                             all_dic_dataset = fill_result_dict(path, all_dic_dataset, dataset, m, file_result_='unmarked', simu=simu)
     if return_dic:
-        all_dic_dataset = get_mean_std(all_dic_dataset, int_to_str=False)
+        all_dic_dataset = get_mean_std(all_dic_dataset, int_to_str=False, std=std)
         return all_dic_dataset
     else:
-        all_dic_dataset = get_mean_std(all_dic_dataset, int_to_str=True)
+        all_dic_dataset = get_mean_std(all_dic_dataset, int_to_str=True, std=std)
         #all_dic_dataset = std_values(all_dic_dataset, robust=True)
     if not per_dataset:
         for dataset, metrics_dic in all_dic_dataset.items():
@@ -303,13 +315,17 @@ def map_datasets(dataset):
         'github_filtered':'Github',
         'stack_overflow_filtered':'Stack Overflow',
         'stack_overflow':'Stack Overflow',
-        'retweets_filtered_short': 'Retweets'
+        'retweets_filtered_short': 'Retweets',
+        'hawkes_exponential_mutual_large': 'Hawkes',
+        'hawkes_exponential_mutual_bis': 'Hawkes',
+        'amazon_toys': 'Amazon Toys',
+        'amazon_movies': 'Amazon Movies'
     }
     return mapping[dataset]
 
 def get_dataset_types(dataset):
     print(dataset)
-    dataset_marked_filtered = ['lastfm_filtered', 'mooc_filtered', 'wikipedia_filtered', 'github_filtered', 'mimic2_filtered', 'hawkes_exponential_mutual', 'stack_overflow_filtered', 'retweets_filtered_short', 'reddit_filtered_short']
+    dataset_marked_filtered = ['lastfm_filtered', 'mooc_filtered', 'wikipedia_filtered', 'github_filtered', 'mimic2_filtered', 'hawkes_exponential_mutual_large', 'stack_overflow_filtered', 'retweets_filtered_short', 'reddit_filtered_short', 'amazon_toys', 'amazon_movies', 'hawkes_exponential_mutual_bis']
     dataset_marked_unfiltered = ['lastfm', 'mooc', 'reddit', 'stack_overflow']
     dataset_marked = dataset_marked_filtered + dataset_marked_unfiltered
     
@@ -842,9 +858,9 @@ def fill_result_dict(path, all_dic_dataset, dataset, m, file_result_, simu=False
                 for key in all_dic_dataset[dataset].keys():
                     if file_result_ == 'original':
                         if key == 'NLL-T':
-                            all_dic_dataset[dataset][key][m].append(-r['log ground density'])
+                            all_dic_dataset[dataset][key][m].append(r['loss_t'] + r['loss_w'])
                         elif key == 'NLL-M':
-                            all_dic_dataset[dataset][key][m].append(-r['log mark density'])
+                            all_dic_dataset[dataset][key][m].append(r['loss_m'])
                         elif key in ['NLL Total', 'NLL']:
                             all_dic_dataset[dataset][key][m].append(r['loss'])
                         elif key == 'PCE':
@@ -863,12 +879,12 @@ def fill_result_dict(path, all_dic_dataset, dataset, m, file_result_, simu=False
                             else:
                                 all_dic_dataset[dataset][key][m].append(r['acc at 3'])
                         elif key == 'Acc@5':
-                            if dataset in ['retweets_filtered_short']:
+                            if dataset in ['retweets_filtered_short', 'hawkes_exponential_mutual_bis', 'amazon_toys', 'amazon_movies']:
                                 all_dic_dataset[dataset][key][m].append(1)
                             else:
                                 all_dic_dataset[dataset][key][m].append(r['acc at 5'])
                         elif key == 'Acc@10':
-                            if dataset in ['github_filtered', 'retweets_filtered_short']:
+                            if dataset in ['github_filtered', 'retweets_filtered_short', 'hawkes_exponential_mutual_bis', 'amazon_toys', 'amazon_movies']:
                                 all_dic_dataset[dataset][key][m].append(1)
                             else:
                                 all_dic_dataset[dataset][key][m].append(r['acc at 10'])

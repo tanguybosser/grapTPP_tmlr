@@ -1,5 +1,6 @@
 import torch as th
 import torch.nn as nn
+th.autograd.set_detect_anomaly(True)
 
 from typing import Dict, Optional, Tuple, List
 
@@ -7,6 +8,9 @@ from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, subtract_exp, check_tensor
+from tpps.utils.nnplus import non_neg_param
+
+
 
 class RMTPPDecoder(VariableHistoryDecoder):
     """Analytic decoder process, uses a closed form for the intensity
@@ -23,23 +27,47 @@ class RMTPPDecoder(VariableHistoryDecoder):
             multi_labels: Optional[bool] = False,
             marks: Optional[int] = 1,
             encoding: Optional[str] = "times_only",
+            mark_activation: Optional[str] = 'relu',
+            name: Optional[str] = 'rmtpp',
             **kwargs):
-        if encoding not in ["times_only", "log_times_only"]:
-            raise ValueError("Wrong encoding for RMTPP decoder")
         super(RMTPPDecoder, self).__init__(
-            name="rmtpp",
+            name=name,
             input_size=units_mlp[0],
             encoding=encoding,
             marks=marks)
         self.w = nn.Parameter(th.Tensor(1))
-        self.w_h = nn.Linear(self.input_size, marks)
+        self.w_list = []
+        #self.w_h = nn.Linear(self.input_size, marks)
         self.w_t  = nn.Linear(self.input_size, 1)
+        self.mu = nn.Parameter(th.Tensor(1))
         self.multi_labels = multi_labels
         self.reset_parameters()
 
+        self.marks2 = nn.Linear(
+            in_features=units_mlp[1], out_features=marks)
+        self.mark_time = nn.Linear(
+                in_features=self.input_size, out_features=units_mlp[1])
+        self.mark_activation = self.get_mark_activation(mark_activation)
+
     def reset_parameters(self):
         nn.init.uniform_(self.w, b=0.001)
+        #nn.init.uniform_(self.mu)
 
+
+    def log_mark_pmf(
+            self, 
+            query_representations:th.Tensor, 
+            history_representations:th.Tensor):
+        
+        p_m = th.softmax(
+                self.marks2(
+                    self.mark_activation(self.mark_time(history_representations))), dim=-1)
+        
+        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+
+        return th.log(p_m)
+
+    
     def forward(
             self,
             events: Events,
@@ -86,6 +114,7 @@ class RMTPPDecoder(VariableHistoryDecoder):
 
         """
         
+
         (query_representations,
          intensity_mask) = self.get_query_representations(
             events=events,
@@ -97,73 +126,69 @@ class RMTPPDecoder(VariableHistoryDecoder):
             representations=representations, 
             representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
 
-
-        history_representations = take_3_by_2(                            #Do not use get_query_representations ? 
+        history_representations = take_3_by_2(                         
             representations, index=prev_times_idxs)                   # [B,T,D]
 
-        #v_h_t = query_representations[:, :, 0]                        # [B,T] v_t * h_j #query representations are in fact history     embeddings. 
+        self.mu.data = non_neg_param(self.mu.data)
+        check_tensor(self.mu.data, positive=True)
+
         v_h_t = self.w_t(history_representations)                         #[B,T,1]
         v_h_t = v_h_t.squeeze(-1)                                         #[B,T]
+        delta_t = query - prev_times
+        w_delta_t = self.w * delta_t                     # [B,T]
+    
+        exp_term = th.clamp(w_delta_t + v_h_t, max=80) #Avoids infinity. 
+        exp_term = th.exp(exp_term) 
+        ground_intensity = self.mu + exp_term
+        check_tensor(ground_intensity, positive=True)
+        ground_intensity = ground_intensity + epsilon(dtype=ground_intensity.dtype, device=ground_intensity.device)
+        log_ground_intensity = th.log(ground_intensity)
+        check_tensor(log_ground_intensity)
 
-        #v_h_m = query_representations[:, :, 1:]                       # [B,T,M] V^k * h_j
-        v_h_m = self.w_h(history_representations)                         #[B,T,M]
-        #self.w.data.clamp_(epsilon(eps=1e-6,
-        #    dtype=query.dtype, device=query.device))                #Ensure weights remain positive
-        if self.encoding == 'times_only':
-            w_delta_t = self.w * (query - prev_times)                     # [B,T]
-        else:
-            w_delta_t = self.w * query_representations.squeeze(-1)                      #[B,T]
-        base_log_intensity = v_h_t + w_delta_t                        # [B,T]
+        log_mark_pmf = self.log_mark_pmf(
+                                query_representations=query_representations,
+                                history_representations=history_representations
+                            )
+        check_tensor(log_mark_pmf)
 
-        if self.multi_labels:
-            p_m = th.sigmoid(v_h_m)                                   # [B,T,M]
-        else:
-            p_m = th.softmax(v_h_m, dim=-1)                           # [B,T,M]
-        regulariser = epsilon(dtype=p_m.dtype, device=p_m.device)
-        p_m = p_m + regulariser
-
-        marked_log_intensity = base_log_intensity.unsqueeze(
-            dim=-1)  # [B,T,1]
-        marked_log_intensity = marked_log_intensity + th.log(p_m)     # [B,T,M]
-
-        intensity_mask = pos_delta_mask                                 # [B,T]
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
                 representations_mask, index=prev_times_idxs)            # [B,T]
             intensity_mask = intensity_mask * history_representations_mask
-        if self.encoding == "times_only":
-            exp_1, exp_2 = v_h_t + w_delta_t, v_h_t                         # [B,T]
-            # Avoid exponentiating to get masked infinity
-            #print('query', query)
-            #print('query-prev', query - prev_times)
-            #print('w_delta_t', w_delta_t)
-            exp_1, exp_2 = exp_1 * intensity_mask, exp_2 * intensity_mask   # [B,T]
-            #base_intensity_itg = subtract_exp(exp_1, exp_2)
-            base_intensity_itg = th.exp(exp_1) - th.exp(exp_2)
-            base_intensity_itg = base_intensity_itg / self.w                # [B,T]
-            base_intensity_itg = th.relu(base_intensity_itg)
-            #print('base_int', base_intensity_itg)
-            #base_intensity_itg.data.clamp_(1e10)
-        else:
-            delta_t = (query - prev_times) * intensity_mask
-            delta_t = delta_t + (delta_t == 0).float() * epsilon(
-            dtype=delta_t.dtype, device=delta_t.device)
-            base_intensity_itg  = th.exp(v_h_t) * th.pow(delta_t, self.w+1)/(self.w + 1)
-
-        marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)   # [B,T,1]
-        marked_intensity_itg = marked_intensity_itg * p_m             # [B,T,M]
-        artifacts_decoder = {
-            "base_log_intensity": base_log_intensity,
-            "base_intensity_integral": base_intensity_itg,
-            "mark_probability": p_m}
-        if artifacts is None:
-            artifacts = {'decoder': artifacts_decoder}
-        else:
-            artifacts['decoder'] = artifacts_decoder
-        check_tensor(marked_log_intensity)
-        check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
+        
+        exp_1, exp_2 = v_h_t + w_delta_t, v_h_t                         # [B,T]
+        exp_1, exp_2 = exp_1 * intensity_mask, exp_2 * intensity_mask   # [B,T]
+        
+        poisson_integral = self.mu * delta_t                            # [B,T]
+                
+        ground_intensity_integrals = th.exp(exp_1) - th.exp(exp_2)
+        ground_intensity_integrals = ground_intensity_integrals / self.w                # [B,T]
+        
+        ground_intensity_integrals = ground_intensity_integrals + poisson_integral 
+        
+        check_tensor(ground_intensity_integrals * intensity_mask,
                      positive=True)
-        return (marked_log_intensity,
-                marked_intensity_itg,
+        
+        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
+        mask = intensity_mask * idx
+        last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
+        last_h = history_representations[th.arange(batch_size), last_event_idx,:]
+        artifacts = {}
+        artifacts['last_h'] = last_h.detach().cpu().numpy()
+        
+        return (log_ground_intensity,
+                log_mark_pmf,
+                ground_intensity_integrals,
                 intensity_mask,
                 artifacts)                      # [B,T,M], [B,T,M], [B,T], Dict
+
+    def get_mark_activation(self, mark_activation):
+        if mark_activation == 'relu':
+            mark_activation = th.relu
+        elif mark_activation == 'tanh':
+            mark_activation = th.tanh
+        elif mark_activation == 'sigmoid':
+            mark_activation = th.sigmoid
+        return mark_activation
+    

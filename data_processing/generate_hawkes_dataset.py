@@ -8,7 +8,7 @@ from collections import defaultdict
 sys.dont_write_bytecode = True
 
 sys.path.remove(os.path.abspath(os.path.join('..', 'neuralTPPs')))
-sys.path.append(os.path.abspath(os.path.join('..', 'cntpp')))
+sys.path.append(os.path.abspath(os.path.join('..', 'neurips')))
 
 from data_processing.simu_hawkes import simulate_process, reformat, plot_process
 #from data_processing.prepare_datasets import make_splits
@@ -61,6 +61,8 @@ def parse_args():
                         help="If True, generates a heterogeneous Hawkes dataset containing multiple different processes.")
     parser.add_argument("--n-processes", type=int, default=1,
                         help="Number of different heterogeneous processes to simulate.")
+    parser.add_argument("--n-exp", type=int, default=None,
+                        help="Number of different heterogeneous processes to simulate.")
     parser.add_argument("--from-file", type=str, default=None,
                         help="If provided, processes will be generated from the parameters indicated in the file.")
     args, _ = parser.parse_known_args()
@@ -93,16 +95,15 @@ def update_heterogeneous_args(args):
 
 
 def simulate_dataset(args):
-    if 'independent' in args.kernel_name:
-        assert(args.mutual_adjacency == 0.), 'Independent Hawkes must have mutual adjacency set to 0'
-        assert(args.mutual_decays == 0.), 'Independent Hawkes must have mutual decays set to 0'
-    if 'mutual' in args.kernel_name:
-        assert(args.mutual_adjacency[0] > 0.), 'Dependent Hawkes must have mutual adjacency different of 0'
-        assert(args.mutual_decays[0] > 0.), 'Dependent Hawkes must have mutual decays different of 0'        
-    process, artifacts = simulate_process(kernel_name=args.kernel_name, window=args.window, 
-                            n_seq=args.n_seq, n_seq_train=args.n_seq_train, n_seq_val=args.n_seq_val, n_seq_cal=args.n_seq_cal, n_seq_test=args.n_seq_test,
-                             marks=args.marks, self_decays=args.self_decays, mutual_decays=args.mutual_decays, 
-                            baselines=args.baselines, self_adjacency=args.self_adjacency, mutual_adjacency=args.mutual_adjacency, track_intensity=False)
+    if len(args.baselines) == 0:
+        args = get_simulation_parameters(args)
+    #if 'independent' in args.kernel_name:
+    #    assert(args.mutual_adjacency == 0.), 'Independent Hawkes must have mutual adjacency set to 0'
+    #    assert(args.mutual_decays == 0.), 'Independent Hawkes must have mutual decays set to 0'
+    #if 'mutual' in args.kernel_name:
+    #    assert(args.mutual_adjacency[0] > 0.), 'Dependent Hawkes must have mutual adjacency different of 0'
+    #    assert(args.mutual_decays[0] > 0.), 'Dependent Hawkes must have mutual decays different of 0'        
+    process, artifacts = simulate_process(args, track_intensity=False)
     process_reformat = reformat(process.timestamps)
     return process_reformat, artifacts    
 
@@ -116,6 +117,7 @@ def simulate_heterogeneous_dataset(args, shuffle=True):
             process, artifacts = simulate_process(kernel_name=args.kernel_name, window=args.window, 
                                n_seq=n_seq, marks=args.marks, self_decays=params['self_decays'], mutual_decays=params['mutual_decays'], 
                                baselines=params['baselines'], self_adjacency=params['self_adjacency'], mutual_adjacency=params['mutual_adjacency'], track_intensity=False)
+        
         else:
             process, artifacts = simulate_process(kernel_name=args.kernel_name, window=args.window, 
                                n_seq=args.n_seq[i], marks=args.marks, self_decays=args.self_decays[i], mutual_decays=args.mutual_decays[i], 
@@ -154,15 +156,25 @@ def simulate_heterogeneous_dataset_from_file(args, shuffle=True):
     return all_processes, all_artifacts
 
 
-def get_simulation_parameters(num_marks):
-    params = defaultdict()
-    params['self_decays'] = np.random.uniform(0, 10, size=num_marks)
-    params['mutual_decays'] = np.random.uniform(0,1)
-    params['baselines'] = np.random.uniform(0,1, size=num_marks)
-    params['self_adjacency'] = np.random.uniform(0,.8, size=num_marks)
-    params['mutual_adjacency'] = np.random.uniform(0,0.3)
+def get_simulation_parameters(args):
+    num_marks = args.marks
+    np.random.seed(args.seed)
+    #args.self_decays = np.random.uniform(0, 10, size=num_marks)
+    #args.mutual_decays = np.random.uniform(0,1, size=1)
+    if args.kernel_name == 'hawkes_exponential_mutual':
+        args.baselines = np.random.uniform(0,1, size=num_marks)
+        args.adjacency = np.random.uniform(0,1, size=(num_marks,num_marks))
+        args.decays = np.random.uniform(0,10, size=(num_marks,num_marks))
+    else:
+        args.baselines = np.random.uniform(0,1, size=num_marks)
+        args.adjacency = np.random.uniform(0,1, size=(num_marks,num_marks, args.n_exp))
+        args.decays = np.random.uniform(0,10, size=args.n_exp)
+    print(args.baselines)
+    #args.self_adjacency = np.random.uniform(0,.8, size=num_marks)
+    #args.mutual_adjacency = np.random.uniform(0,0.3, size=1)
+    args.seed += 1
     #print(f'SIMULATED PARAMETERS : {params}')
-    return params 
+    return args
 
 def make_splits(process, artifacts, args, split_idx, train_prop=0.6, val_prop=0.2):
     #end_train_idx = int(len(process)*train_prop)

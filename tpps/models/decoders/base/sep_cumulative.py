@@ -7,6 +7,7 @@ from typing import Optional, Tuple, Dict
 from tpps.models.base.process import Events
 from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
 
+
 from tpps.pytorch.layers.log import Log
 
 from tpps.utils.stability import epsilon, check_tensor, subtract_exp

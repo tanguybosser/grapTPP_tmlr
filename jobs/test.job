@@ -1,0 +1,48 @@
+#!/bin/bash
+  
+#SBATCH --job-name=test
+#SBATCH --output=neurips_output/test.out
+
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+
+
+#MOOC#
+
+for split in 0
+do
+python3 -u scripts/evaluate2.py --no-mlflow --dataset 'mooc_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/nope/mooc_filtered' --save-check-dir 'checkpoints/neurips/mooc_filtered' \
+--model-name 'mooc_filtered_gru_rmtpp-jd_temporal_with_labels_split0' \
+--eval-metrics True --include-poisson False --patience 100 --batch-size 32 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 42 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'rmtpp-jd' \
+--decoder-encoding 'log_times_only' \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation'
+done
+
+
+: "
+##LastFM
+
+for split in 0
+do
+python3 -u scripts/train2.py --no-mlflow --dataset 'lastfm_filtered' --load-from-dir '../neuralTPPs/data/baseline3' \
+--save-results-dir 'results/test/lastfm_filtered' --save-check-dir 'checkpoints/test/lastfm_filtered' \
+--eval-metrics True --include-poisson False --patience 50 --batch-size 4 --split $split \
+--encoder 'gru' --encoder-encoding 'temporal_with_labels' --encoder-emb-dim 8 \
+--encoder-units-rnn 46 --encoder-layers-rnn 1 \
+--encoder-units-mlp 32 --encoder-activation-mlp 'relu' \
+--decoder 'thp' \
+--decoder-encoding 'log_times_only' --decoder-emb-dim 8 \
+--decoder-units-mlp 32 \
+--decoder-hist-time-grouping 'concatenation' \
+--separate-training False \
+--decoder-mc-prop-est 50 \
+--train-epochs 20
+done
+"

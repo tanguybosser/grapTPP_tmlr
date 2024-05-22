@@ -4,15 +4,14 @@ import torch.nn as nn
 
 from typing import Dict, Optional, Tuple, List
 
-from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
-from tpps.pytorch.models import LAYER_CLASSES
+from tpps.models.decoders.log_normal_mixture_jd import LogNormalMixture_JD
 
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
 from tpps.utils.encoding import encoding_size
 
-class LogNormalMixture_DD(VariableHistoryDecoder):
+class LogNormalMixture_DD(LogNormalMixture_JD):
     """Analytic decoder process, uses a closed form for the intensity
     to train the model.
     See https://arxiv.org/pdf/1909.12127.pdf.
@@ -36,36 +35,15 @@ class LogNormalMixture_DD(VariableHistoryDecoder):
             **kwargs):
         super(LogNormalMixture_DD, self).__init__(
             name="log-normal-mixture-dd",
-            input_size=units_mlp[0],
+            n_mixture=n_mixture,
+            units_mlp=units_mlp,
+            multi_labels=multi_labels,
             marks=marks,
-            encoding=encoding, 
+            encoding=encoding,
+            embedding_constraint=embedding_constraint,
             emb_dim=emb_dim,
-            embedding_constraint=embedding_constraint,  
+            mark_activation=mark_activation,
             **kwargs)
-        if len(units_mlp) < 2:
-            raise ValueError("Units of length at least 2 need to be specified")
-        enc_size = encoding_size(encoding=encoding, emb_dim=emb_dim)
-        self.mu = nn.Linear(in_features=units_mlp[0], out_features=n_mixture)
-        self.s = nn.Linear(in_features=units_mlp[0], out_features=n_mixture)
-        self.w = nn.Linear(in_features=units_mlp[0], out_features=n_mixture)
-        
-        self.marks2 = nn.Linear(
-            in_features=units_mlp[1], out_features=marks)
-        self.multi_labels = multi_labels
-        self.hist_time_grouping = hist_time_grouping
-        self.cond_ind = cond_ind
-        if self.hist_time_grouping == 'summation':
-            self.marks1 = nn.Linear(
-            in_features=units_mlp[0], out_features=units_mlp[1])
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size, out_features=units_mlp[1]
-            )
-        elif self.hist_time_grouping == 'concatenation':
-            self.mark_time = nn.Linear(
-                in_features=self.encoding_size + self.input_size, out_features=units_mlp[1]
-            )
-        self.mark_activation = self.get_mark_activation(mark_activation)
-
         
 
     def forward(
@@ -79,7 +57,6 @@ class LogNormalMixture_DD(VariableHistoryDecoder):
             representations: th.Tensor,
             representations_mask: Optional[th.Tensor] = None,
             artifacts: Optional[dict] = None, 
-            sampling: Optional[bool] = False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
         """Compute the intensities for each query time given event
         representations.
@@ -113,8 +90,12 @@ class LogNormalMixture_DD(VariableHistoryDecoder):
             artifacts: A dictionary of whatever else you might want to return.
 
         """
+        
         query.requires_grad = True
         
+        batch_size = query.shape[0]
+
+        #Not needed here
         (query_representations,
          intensity_mask) = self.get_query_representations(
             events=events,
@@ -126,6 +107,7 @@ class LogNormalMixture_DD(VariableHistoryDecoder):
             representations=representations, 
             representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
 
+    
         batch_size = query.shape[0]
         representations_time = representations[0:batch_size,:,:]
         representations_mark = representations[batch_size:,:,:]
@@ -137,109 +119,66 @@ class LogNormalMixture_DD(VariableHistoryDecoder):
         
         delta_t = query - prev_times  # [B,T]
         delta_t = delta_t.unsqueeze(-1)  # [B,T,1]
-        delta_t = th.relu(delta_t) #Just to ensure that the deltas are positive ? 
+        delta_t = th.relu(delta_t) 
         delta_t = delta_t + (delta_t == 0).float() * epsilon(
         dtype=delta_t.dtype, device=delta_t.device)
         delta_t = th.log(delta_t)
-
+        
         mu = self.mu(history_representations_time)  # [B,T,K]
         std = th.exp(self.s(history_representations_time))
         w = th.softmax(self.w(history_representations_time), dim=-1)
         
-        if self.cond_ind is True:
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.marks1(history_representations_mark))), dim=-1)
-        else:
-            if self.hist_time_grouping == 'summation':
-                p_m = th.softmax(
-                    self.marks2(
-                        self.mark_activation(self.marks1(history_representations_mark) + self.mark_time(query_representations))), dim=-1) 
-            elif self.hist_time_grouping == 'concatenation':
-                history_times = th.cat((history_representations_mark, query_representations), dim=-1)
-                p_m = th.softmax(
-                    self.marks2(
-                        self.mark_activation(self.mark_time(history_times))), dim=-1)
-        
-        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+        log_mark_pmf = self.log_mark_pmf(
+                                query_representations=query_representations,
+                                history_representations=history_representations_mark
+                            )
+        check_tensor(log_mark_pmf)
+
         cum_f = w * 0.5 * (
                 1 + th.erf((delta_t - mu) / (std * math.sqrt(2))))
+        #Ground cumulative density. 
         cum_f = th.clamp(th.sum(cum_f, dim=-1), max=1-1e-6)
+
         one_min_cum_f = 1. - cum_f
         one_min_cum_f = th.relu(one_min_cum_f) + epsilon(
             dtype=cum_f.dtype, device=cum_f.device)
+        
         f = th.autograd.grad(
             outputs=cum_f,
             inputs=query,
-            grad_outputs=th.ones_like(cum_f),
+            grad_outputs=th.ones_like(cum_f, requires_grad=True),
             retain_graph=True,
             create_graph=True)[0]
         query.requires_grad = False
     
         f = f + epsilon(dtype=f.dtype, device=f.device)
 
-        log_ground_density = th.log(f)
-        log_mark_density = th.log(p_m)
+        log_ground_intensity = th.log(f / one_min_cum_f)
+        check_tensor(log_ground_intensity)
 
-        check_tensor(log_ground_density)
-        check_tensor(log_mark_density)
-        
-        base_log_intensity = th.log(f / one_min_cum_f)
-        marked_log_intensity = base_log_intensity.unsqueeze(
-            dim=-1)  # [B,T,1]
-        check_tensor(marked_log_intensity * intensity_mask.unsqueeze(-1))
-        marked_log_intensity = marked_log_intensity + th.log(p_m)  # [B,T,M]
-
-        base_intensity_itg = - th.log(one_min_cum_f)
-        marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)  # [B,T,1]
-        
-        #marked_intensity_itg = marked_intensity_itg * p_m  # [B,T,M] 
-
-        ones = th.ones_like(p_m)
-        marked_intensity_itg = (marked_intensity_itg / self.marks) * ones  
-
-        #intensity_mask = pos_delta_mask  # [B,T]
+        ground_intensity_integrals = - th.log(one_min_cum_f) +  epsilon(eps=1e-7,
+            dtype=cum_f.dtype, device=cum_f.device)
+        check_tensor(ground_intensity_integrals * intensity_mask, positive=True)
+    
+    
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
                 representations_mask, index=prev_times_idxs)  # [B,T]
             intensity_mask = intensity_mask * history_representations_mask
 
-        artifacts_decoder = {
-            "base_log_intensity": base_log_intensity,
-            "base_intensity_integral": base_intensity_itg,
-            "mark_probability": p_m}
-        if artifacts is None:
-            artifacts = {'decoder': artifacts_decoder}
-        else:
-            artifacts['decoder'] = artifacts_decoder
-
-        check_tensor(marked_log_intensity * intensity_mask.unsqueeze(-1))
-        check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
-                     positive=True)
-        
         idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
         mask = intensity_mask * idx
         last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
         last_h_t = history_representations_time[th.arange(batch_size), last_event_idx,:]
         last_h_m = history_representations_mark[th.arange(batch_size), last_event_idx,:] #[B,D]
-        
+        artifacts = {}
         artifacts['last_h_t'] = last_h_t.detach().cpu().numpy()
         artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
-        artifacts["mu"] = mu.detach()[:,-1,:].squeeze().cpu().numpy() #Take history representation of window, i.e. up to last observed event. 
-        artifacts["sigma"] = std.detach()[:,-1,:].squeeze().cpu().numpy()
-        artifacts["w"] = w.detach()[:,-1,:].squeeze().cpu().numpy()
-        artifacts['pm'] = p_m.detach()[0,:5,:].squeeze(0).cpu().numpy()
 
-        return (marked_log_intensity,
-                marked_intensity_itg,
+        return (log_ground_intensity,
+                log_mark_pmf,
+                ground_intensity_integrals,
                 intensity_mask,
                 artifacts)                      # [B,T,M], [B,T,M], [B,T], Dict
-
-    def get_mark_activation(self, mark_activation):
-        if mark_activation == 'relu':
-            mark_activation = th.relu
-        elif mark_activation == 'tanh':
-            mark_activation = th.tanh
-        elif mark_activation == 'sigmoid':
-            mark_activation = th.sigmoid
-        return mark_activation
+    

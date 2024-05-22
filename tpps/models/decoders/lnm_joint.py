@@ -32,11 +32,6 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
             emb_dim: Optional[int] = 2,
             mark_activation: Optional[str] = 'relu',
             **kwargs):
-        if encoding not in ["times_only", "learnable"]:
-            raise ValueError("Invalid event encoding for LogNormMix decoder.")
-        if encoding == 'learnable' and embedding_constraint is None:
-            print("Warning, embedding are unconstrained for LongNormMix decoder, setting to 'nonneg'")
-            embedding_constraint = 'nonneg'
         super(JointLogNormalMixtureDecoder, self).__init__(
             name="joint-log-normal-mixture",
             input_size=units_mlp[0],
@@ -49,20 +44,31 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
             raise ValueError("Units of length at least 2 need to be specified")
         self.marks = marks
         self.n_mixture = n_mixture
-        enc_size = encoding_size(encoding=encoding, emb_dim=emb_dim)
         self.mu = nn.Linear(in_features=units_mlp[0], out_features=marks * n_mixture)
         self.s = nn.Linear(in_features=units_mlp[0], out_features=marks * n_mixture)
         self.w = nn.Linear(in_features=units_mlp[0], out_features=marks * n_mixture)
-        if self.encoding == "learnable":
-            w_t_layer = LAYER_CLASSES[self.embedding_constraint]
-            self.w_t = w_t_layer(in_features=enc_size, out_features=1)
         self.marks1 = nn.Linear(
             in_features=units_mlp[0], out_features=units_mlp[1])
         self.marks2 = nn.Linear(
             in_features=units_mlp[1], out_features=marks)
-        self.multi_labels = multi_labels
         self.mark_activation = self.get_mark_activation(mark_activation)
 
+    
+    def log_mark_pmf(
+            self, 
+            query_representations:th.Tensor, 
+            history_representations:th.Tensor):
+        
+        p_m = th.softmax(
+            self.marks2(
+                self.mark_activation(self.marks1(history_representations))), dim=-1)
+        
+        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+        
+        return th.log(p_m)
+    
+    
+    
     def forward(
             self,
             events: Events,
@@ -145,11 +151,13 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         w = w.view(b,l,k,c)
         w = th.softmax(w, dim=-1)
         
-        p_m = th.softmax(
-            self.marks2(
-                self.mark_activation(self.marks1(history_representations))), dim=-1)
-        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+        log_mark_pmf = self.log_mark_pmf(
+                            query_representations=query_representations,
+                            history_representations=history_representations
+        )
         
+        mark_pmf = th.exp(log_mark_pmf)
+
         cum_f_k = w * 0.5 * (
                 1 + th.erf((delta_t - mu) / (std * math.sqrt(2))))
         cum_f_k = th.clamp(th.sum(cum_f_k, dim=-1), max=1-1e-6) #[B,T,K]
@@ -172,13 +180,13 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         f_k = f_k + epsilon(dtype=f_k.dtype, device=f_k.device) #[B,T,K]
         
         #Joint distribution
-        f_joint = f_k * p_m #[B,T,K] 
+        f_joint = f_k * mark_pmf #[B,T,K] 
         
         #Marginal of times 
         f = th.sum(f_joint, dim=-1)
 
         #Joint CDF
-        cum_f_joint = cum_f_k * p_m 
+        cum_f_joint = cum_f_k * mark_pmf  
         
         #Marginal CDF
         cum_f = th.sum(cum_f_joint, dim=-1) #[B,T]
@@ -187,20 +195,21 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         one_min_cum_f = th.relu(one_min_cum_f) + epsilon(
             dtype=cum_f.dtype, device=cum_f.device)
         
-        base_log_intensity = th.log(f / one_min_cum_f)
-        base_intensity_itg = - th.log(one_min_cum_f)
+        log_ground_intensity = th.log(f / one_min_cum_f)
+        ground_intensity_integrals = - th.log(one_min_cum_f) + epsilon(eps=1e-7,
+            dtype=cum_f.dtype, device=cum_f.device)
         
-        one_min_cum_f = one_min_cum_f.unsqueeze(-1) #[B,T,1]
+        #one_min_cum_f = one_min_cum_f.unsqueeze(-1) #[B,T,1]
         
-        marked_log_intensity = th.log(f_joint / one_min_cum_f) #[B,T,K]
+        #marked_log_intensity = th.log(f_joint / one_min_cum_f) #[B,T,K]
         #marked_log_intensity = marked_log_intensity + th.log(p_m)  # [B,T,K]
 
-        marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)  # [B,T,1]
+        #marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)  # [B,T,1]
         
         #Trick to have Lambda(t) = \sum_k(Lambda_k(t))
         #This does not return the true Lambda_k(t), but we don't need it later, only Lambda(t)
-        ones = th.ones_like(p_m)
-        marked_intensity_itg = (marked_intensity_itg / self.marks) * ones  
+        #ones = th.ones_like(p_m)
+        #marked_intensity_itg = (marked_intensity_itg / self.marks) * ones  
 
         #intensity_mask = pos_delta_mask  # [B,T]
         if representations_mask is not None:
@@ -208,33 +217,34 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
                 representations_mask, index=prev_times_idxs)  # [B,T]
             intensity_mask = intensity_mask * history_representations_mask
 
-        artifacts_decoder = {
-            "base_log_intensity": base_log_intensity,
-            "base_intensity_integral": base_intensity_itg,
-            "mark_probability": p_m}
-        if artifacts is None:
-            artifacts = {'decoder': artifacts_decoder}
-        else:
-            artifacts['decoder'] = artifacts_decoder
+        #artifacts_decoder = {
+        #    "base_log_intensity": base_log_intensity,
+        #    "base_intensity_integral": base_intensity_itg,
+        #    "mark_probability": p_m}
+        #if artifacts is None:
+        #    artifacts = {'decoder': artifacts_decoder}
+        #else:
+        #    artifacts['decoder'] = artifacts_decoder
 
-        check_tensor(marked_log_intensity * intensity_mask.unsqueeze(-1))
-        check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
-                     positive=True)
+        #check_tensor(marked_log_intensity * intensity_mask.unsqueeze(-1))
+        #check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
+        #            positive=True)
         
+        check_tensor(log_ground_intensity)
+        check_tensor(log_mark_pmf)
+        check_tensor(ground_intensity_integrals * intensity_mask, positive=True)
+
+
         idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
         mask = intensity_mask * idx
         last_event_idx  = th.argmax(mask, 1)
+        batch_size = query.shape[0]
         last_h = history_representations[th.arange(batch_size), last_event_idx,:]
-        
+        artifacts = {}
         artifacts['last_h'] = last_h.detach().cpu().numpy()
-        artifacts["mu"] = mu.detach()[:,-1,:].squeeze().cpu().numpy() #Take history representation of window, i.e. up to last observed event. 
-        artifacts["sigma"] = std.detach()[:,-1,:].squeeze().cpu().numpy()
-        artifacts["w"] = w.detach()[:,-1,:].squeeze().cpu().numpy()
+    
 
-        return (marked_log_intensity,
-                marked_intensity_itg,
-                intensity_mask,
-                artifacts)                      # [B,T,M], [B,T,M], [B,T], Dict
+        return log_ground_intensity, log_mark_pmf, ground_intensity_integrals, intensity_mask, artifacts 
 
     def get_mark_activation(self, mark_activation):
         if mark_activation == 'relu':

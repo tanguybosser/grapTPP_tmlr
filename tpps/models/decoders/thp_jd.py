@@ -49,12 +49,13 @@ class THP_JD(MCDecoder):
             time_encoding: Optional[str] = "relative",
             marks: Optional[int] = 1,
             mark_activation: Optional[str] = 'relu',
-            hist_time_grouping: Optional[str] = 'summation',
+            hist_time_grouping: Optional[str] = 'concatenation',
+            name:Optional[str] = 'thp-jd', 
             **kwargs):
         if len(units_mlp) < 2:
             raise ValueError("Units of length at least 2 need to be specified")
         super(THP_JD, self).__init__(
-            name="thp-jd",
+            name=name,
             input_size=units_mlp[0],
             mc_prop_est=mc_prop_est,
             emb_dim=emb_dim,
@@ -81,8 +82,45 @@ class THP_JD(MCDecoder):
             )
         self.mark_activation = self.get_mark_activation(mark_activation)
 
-    def log_intensity(
+    
+    def log_ground_intensity(
             self,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            history_representations: th.Tensor,
+            intensity_mask:Optional[th.Tensor] = None):
+        
+        prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
+        delta_t = (query - prev_times)/prev_times
+        check_tensor(delta_t)
+        delta_t = delta_t.unsqueeze(-1)
+
+        w_delta_t = self.w_t(delta_t) #[B,T,M]
+        w_history = self.w_h(history_representations) #[B,T,M]
+        outputs = self.activation(w_delta_t + w_history) #[B,T,M]
+        outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
+
+        outputs = th.sum(outputs, dim=-1) #[B,T,1]
+    
+        return th.log(outputs)
+    
+
+    def log_mark_pmf(
+            self, 
+            query_representations:th.Tensor, 
+            history_representations:th.Tensor):
+        
+        history_times = th.cat((history_representations, query_representations), dim=-1)
+        p_m = th.softmax(
+                self.marks2(
+                    self.mark_activation(self.mark_time(history_times))), dim=-1)
+        
+        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+
+        return th.log(p_m)
+
+    
+    def forward(self,
             events: Events,
             query: th.Tensor,
             prev_times: th.Tensor,
@@ -91,36 +129,7 @@ class THP_JD(MCDecoder):
             is_event: th.Tensor,
             representations: th.Tensor,
             representations_mask: Optional[th.Tensor] = None,
-            artifacts: Optional[dict] = None
-    ) -> Tuple[th.Tensor, th.Tensor, Dict]:
-        """Compute the log_intensity and a mask
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures.
-
-        """
+            artifacts: Optional[dict] = None):
         
         (query_representations,
          intensity_mask) = self.get_query_representations(
@@ -142,33 +151,22 @@ class THP_JD(MCDecoder):
         history_representations = take_3_by_2(
             representations, index=prev_times_idxs)                   # [B,T,D]
 
-
-        if self.hist_time_grouping == 'summation':
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.marks1(history_representations) + self.mark_time(query_representations))), dim=-1) 
-        elif self.hist_time_grouping == 'concatenation':
-            history_times = th.cat((history_representations, query_representations), dim=-1)
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.mark_time(history_times))), dim=-1)
+        log_ground_intensity = self.log_ground_intensity(
+                                        query=query, 
+                                        prev_times=prev_times, 
+                                        history_representations=history_representations)
         
-        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
+        log_mark_pmf = self.log_mark_pmf(
+                        query_representations=query_representations, 
+                        history_representations=history_representations)
 
-        prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
-
-        delta_t = (query - prev_times)/prev_times
-        check_tensor(delta_t)
-        delta_t = delta_t.unsqueeze(-1)
-
-        w_delta_t = self.w_t(delta_t) #[B,T,M]
-        w_history = self.w_h(history_representations) #[B,T,M]
-        outputs = self.activation(w_delta_t + w_history) #[B,T,M]
-        outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
-
-        outputs = th.sum(outputs, dim=-1) #[B,T,1]
-
-        outputs = outputs.unsqueeze(-1) * p_m
+        ground_intensity_integral = self.intensity_integral(
+                                                query=query, 
+                                                prev_times=prev_times,
+                                                prev_times_idxs=prev_times_idxs,
+                                                intensity_mask=intensity_mask,
+                                                representations=representations
+                                                )
 
         idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
         mask = intensity_mask * idx
@@ -178,8 +176,24 @@ class THP_JD(MCDecoder):
         artifacts = {}
         artifacts['last_h'] = last_h.detach().cpu().numpy()
         
-        return th.log(outputs), intensity_mask, artifacts 
+
+        return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts
     
+    def log_intensity(
+            self,
+            events: Events,
+            query: th.Tensor,
+            prev_times: th.Tensor,
+            prev_times_idxs: th.Tensor,
+            pos_delta_mask: th.Tensor,
+            is_event: th.Tensor,
+            representations: th.Tensor,
+            representations_mask: Optional[th.Tensor] = None,
+            artifacts: Optional[dict] = None
+    ) -> Tuple[th.Tensor, th.Tensor, Dict]:
+        pass 
+
+
     
     def get_mark_activation(self, mark_activation):
         if mark_activation == 'relu':

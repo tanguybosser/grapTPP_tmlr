@@ -330,6 +330,18 @@ def make_splits_calibration(datasets, load_dir, n_split=5, train_prop=0.65, val_
                                     max_len=max_len, shuffle=shuffle)
             print('Succesfully created calibration split {} for dataset {}'.format(i, dataset))
 
+
+def clean_short_sequences(dataset, load_dir):
+    file = f'{load_dir}/{dataset}/{dataset}.json'
+    with open(file, 'r') as f:
+        sequences = json.load(f)
+    new_sequences = [[event for event in seq if event['time'] != 0] for seq in sequences]
+    new_sequences = [seq for seq in new_sequences if len(seq) >= 2]
+    with open(file, 'w') as f:
+        json.dump(new_sequences, f)
+
+
+
 def rescale(datasets, t_lim=10):
     file_dir = '../neuralTPPs/data/baseline3/'
     for dataset in datasets:

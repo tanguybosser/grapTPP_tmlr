@@ -1,11 +1,12 @@
 #!/bin/bash
   
 #SBATCH --job-name=simu_hawkes
-#SBATCH --output=work_outputs/simu_hawkes.out
+#SBATCH --output=neurips_output/simu_hawkes.out
 
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=20
 #SBATCH --mem=10G
 
+: "
 #Simulation of Hawkes mutual Dataset# 
 
 python3 -u data_processing/generate_hawkes_dataset.py \
@@ -26,7 +27,68 @@ python3 -u data_processing/generate_hawkes_dataset.py \
 --self-adjacency .25 .35 .2 .3 .25 \
 --mutual-adjacency .13 \
 --save-dir 'data/baseline3' \
---num-splits 1
+--num-splits 5
+
+
+#Simulation of Hawkes mutual Dataset# 
+
+python3 -u data_processing/generate_hawkes_dataset.py \
+--kernel-name 'hawkes_exponential_mutual' \
+--dataset-name 'hawkes_exponential_mutual_50_bis' \
+--simu-type 'dataset' \
+--heterogeneous-dataset False \
+--n-seq-train 1 \
+--n-seq-val 1 \
+--n-seq-cal 0 \
+-n-seq-test 1 \
+--window 3 \
+--n-seq 3 \
+--marks 50 \
+--save-dir 'data/baseline3' \
+--num-splits 1 \
+--seed 0
+"
+
+#Simulation of Hawkes mutual Dataset# 
+
+python3 -u data_processing/generate_hawkes_dataset.py \
+--kernel-name 'hawkes_exponential_mutual' \
+--dataset-name 'hawkes_exponential_mutual_50' \
+--simu-type 'dataset' \
+--heterogeneous-dataset False \
+--n-seq-train 500 \
+--n-seq-val 100 \
+--n-seq-cal 0 \
+--n-seq-test 200 \
+--window 3 \
+--n-seq 800 \
+--marks 50 \
+--save-dir 'data/baseline3' \
+--num-splits 5 \
+--seed 0
+
+
+
+: "
+#Simulation of Hawkes mutual Dataset# 
+
+python3 -u data_processing/generate_hawkes_dataset.py \
+--kernel-name 'hawkes_sum_exponential_mutual' \
+--dataset-name 'hawkes_sum_exponential_mutual' \
+--simu-type 'dataset' \
+--heterogeneous-dataset False \
+--n-seq-train 300 \
+--n-seq-val 100 \
+--n-seq-cal 0 \
+--n-seq-test 100 \
+--window 3 \
+--n-seq 500 \
+--marks 50 \
+--save-dir 'data/baseline3' \
+--num-splits 1 \
+--seed 0 \
+--n-exp 50
+"
 
 : "
 #Simulation of Hawkes independent Dataset#
