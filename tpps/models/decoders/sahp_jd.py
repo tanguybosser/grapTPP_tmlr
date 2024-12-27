@@ -1,5 +1,4 @@
 import torch as th
-import torch.nn.functional as F
 import torch.nn as nn
 
 from tpps.pytorch.activations import ParametricSoftplus
@@ -9,12 +8,8 @@ from typing import List, Optional, Tuple, Dict
 from tpps.models.decoders.base.monte_carlo import MCDecoder
 from tpps.models.base.process import Events
 
-from tpps.pytorch.models import MLP
-
-from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2, take_2_by_2
-from tpps.utils.stability import epsilon, check_tensor
-from tpps.pytorch.layers.dense import NonNegLinear
+from tpps.utils.stability import epsilon
 
 class SAHP_JD(MCDecoder):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/pdf/1907.07561.pdf
@@ -86,94 +81,6 @@ class SAHP_JD(MCDecoder):
         self.mark_activation = self.get_mark_activation(mark_activation)
 
 
-    '''
-    def log_intensity(
-            self,
-            events: Events,
-            query: th.Tensor,
-            prev_times: th.Tensor,
-            prev_times_idxs: th.Tensor,
-            pos_delta_mask: th.Tensor,
-            is_event: th.Tensor,
-            representations: th.Tensor,
-            representations_mask: Optional[th.Tensor] = None,
-            artifacts: Optional[dict] = None
-    ) -> Tuple[th.Tensor, th.Tensor, Dict]:
-        """Compute the log_intensity and a mask
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures.
-
-        """
-        
-        (query_representations,
-         intensity_mask) = self.get_query_representations(
-            events=events,
-            query=query,
-            prev_times=prev_times,
-            prev_times_idxs=prev_times_idxs,
-            pos_delta_mask=pos_delta_mask,
-            is_event=is_event,
-            representations=representations, 
-            representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
-
-        intensity_mask = pos_delta_mask                                 # [B,T]
-        if representations_mask is not None:
-            history_representations_mask = take_2_by_2(
-                representations_mask, index=prev_times_idxs)            # [B,T]
-            intensity_mask = intensity_mask * history_representations_mask
-
-        history_representations = take_3_by_2(
-            representations, index=prev_times_idxs)                   # [B,T,D] 
-
-        
-
-        if self.hist_time_grouping == 'summation':
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.marks1(history_representations) + self.mark_time(query_representations))), dim=-1) 
-        elif self.hist_time_grouping == 'concatenation':
-            history_times = th.cat((history_representations, query_representations), dim=-1)
-            p_m = th.softmax(
-                self.marks2(
-                    self.mark_activation(self.mark_time(history_times))), dim=-1)
-        
-        p_m = p_m + epsilon(dtype=p_m.dtype, device=p_m.device)
-        
-        outputs = outputs.unsqueeze(-1) * p_m
-
-        idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
-        mask = intensity_mask * idx
-        last_event_idx  = th.argmax(mask, 1)
-        batch_size = query.shape[0]
-        last_h = history_representations[th.arange(batch_size), last_event_idx,:]
-        artifacts = {}
-        artifacts['last_h'] = last_h.detach().cpu().numpy()
-        
-        return th.log(outputs), intensity_mask, artifacts 
-        '''
 
     def log_ground_intensity(
             self,

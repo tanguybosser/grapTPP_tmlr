@@ -77,7 +77,6 @@ class RecurrentEncoder(VariableHistoryEncoder):
                 are well-defined.
 
         """
-        #Representation of window start shouldn't be part of computations. 
         histories, histories_mask = self.get_events_representations(
             events=events)                                  # [B,L+1,D] [B,L+1]
 

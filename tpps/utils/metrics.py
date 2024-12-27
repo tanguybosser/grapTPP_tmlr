@@ -5,7 +5,6 @@ from sklearn.metrics import roc_auc_score
 
 from collections import Counter
 
-
 def eval_metrics(pred, gold, probas, ranks, mask, results, n_class, multi_labels=False, test=False):
     if multi_labels:
         pred_labels = np.concatenate([p.reshape(-1, n_class) for p in pred])
@@ -59,6 +58,7 @@ def eval_metrics(pred, gold, probas, ranks, mask, results, n_class, multi_labels
             acc_10 = accuracy_at_n(ranks=ranks, n=10)
             results["acc at 10"] = acc_10
         mrr = mean_reciprocal_rank(ranks=ranks)
+        #mae = mae_time_prediction(times, )
         results["precision"] = precision
         results["pre_macro"] = float(pre_macro)
         results["pre_micro"] = float(pre_micro)
@@ -185,7 +185,6 @@ def micro_metrics(pred, gold, n_class):
               false_positive.sum() + false_negative.sum() != 0)
     return precision, recall, f1, acc
 
-
 def weighted_metrics(pred, gold, n_class):
     precision, recall, f1, acc = metrics_per_class(
         pred=pred, gold=gold, n_class=n_class)
@@ -198,3 +197,4 @@ def weighted_metrics(pred, gold, n_class):
     f1 = np.sum(f1 * gold_count) / gold_count.sum()
     acc = np.sum(acc * gold_count) / gold_count.sum()
     return precision, recall, f1, acc
+

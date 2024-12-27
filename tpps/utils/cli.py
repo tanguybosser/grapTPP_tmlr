@@ -361,6 +361,9 @@ def parse_args(allow_unknown=False):
     parser.add_argument("--nll-weight", 
                          type=float, default=0.5,
                          help='Weight to apply to each term of the nll as (1/weight)*NNL-T + (1-1/weight)*NLL-M')
+    parser.add_argument("--nll-scaling", 
+                         type=float, default=None,
+                         help='Scaling to apply to each term of the nll as (1/weight)*NNL-T + (1-1/weight)*NLL-M')
     parser.add_argument("--separate-training", 
                          type=lambda x: bool(strtobool(x)), default=False,
                          help='If True, trains the NLL-T and NLL-M terms separately.')

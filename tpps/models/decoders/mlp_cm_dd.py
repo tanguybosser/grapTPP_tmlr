@@ -6,8 +6,6 @@ from typing import List, Optional, Tuple, Dict
 from tpps.models.decoders.mlp_cm_jd import MLPCm_JD
 from tpps.models.base.process import Events
 
-from tpps.pytorch.models import MLP
-
 from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2
 from tpps.utils.stability import epsilon, check_tensor
@@ -94,34 +92,7 @@ class MLPCm_DD(MLPCm_JD):
             artifacts: Optional[dict] = None,
             update_running_stats: Optional[bool] = True
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
-        """Compute the cumulative log intensity and a mask
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-            update_running_stats: whether running stats are updated or not.
-
-        Returns:
-            intensity_integral: [B,T,M] The cumulative intensities for each
-                query time for each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures.
-        """
+        
         (query_representations,             
          intensity_mask) = self.get_query_representations(
             events=events,
@@ -182,37 +153,7 @@ class MLPCm_DD(MLPCm_JD):
             artifacts: Optional[bool] = None, 
             sampling: Optional[bool] = False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures
-
-        """
+        
         # Add grads for query to compute derivative
         query.requires_grad = True
         

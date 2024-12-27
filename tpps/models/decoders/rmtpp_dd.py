@@ -1,12 +1,11 @@
 import torch as th
-import torch.nn as nn
 
 from typing import Dict, Optional, Tuple, List
 
 from tpps.models.decoders.rmtpp_jd import RMTPP_JD
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
-from tpps.utils.stability import epsilon, subtract_exp, check_tensor
+from tpps.utils.stability import epsilon, check_tensor
 from tpps.utils.nnplus import non_neg_param
 
 class RMTPP_DD(RMTPP_JD):
@@ -26,6 +25,7 @@ class RMTPP_DD(RMTPP_JD):
             encoding: Optional[str] = "times_only",
             mark_activation: Optional[str] = 'relu',
             hist_time_grouping: Optional[str] = 'summation',
+            cond_ind: Optional[bool] = False,
             **kwargs):
         super(RMTPP_DD, self).__init__(
             name="rmtpp-dd",
@@ -35,6 +35,7 @@ class RMTPP_DD(RMTPP_JD):
             encoding=encoding,
             mark_activation=mark_activation,
             hist_time_grouping=hist_time_grouping,
+            cond_ind=cond_ind,
             **kwargs)
 
     def forward(
@@ -50,40 +51,7 @@ class RMTPP_DD(RMTPP_JD):
             artifacts: Optional[dict] = None,
             sampling: Optional[bool] = False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of window start and
-                each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T] Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        """
         
-
         (query_representations,
          intensity_mask) = self.get_query_representations(
             events=events,

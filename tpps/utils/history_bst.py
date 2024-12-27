@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 from tpps.utils.events import Events
 from tpps.utils.index import take_2_by_2
 from tpps.utils.searchsorted import searchsorted
-
+from tpps.utils.events import get_events, get_window
 
 def get_prev_times_sampling(
         query: th.Tensor,
@@ -100,3 +100,39 @@ def get_prev_times(
         #mask = mask * query_within_window # [B,T]
 
     return (prev_times, prev_times_idxs), is_event, mask               # [B,T]
+
+
+def get_repeated_prev_times(past_events, n_repeats=1):
+    times = past_events.get_times()
+    times = times.repeat_interleave(n_repeats, dim=-1) #[B,L*N]
+    prev_times, is_event, pos_delta_mask = get_prev_times( #
+        query=times+1e-6,
+        events=past_events,
+        allow_window=True)  # ([B,T],[B,T]), [B,T], [B,T]
+    prev_times, prev_times_idxs = prev_times  # [B,T], [B,T] 
+    prev_times = (prev_times, is_event, pos_delta_mask, prev_times_idxs)
+    return prev_times
+
+def get_history_and_target_all(batch, args):
+    target_time, target_label = batch["times"].to(args.device), batch["labels"].to(args.device)
+    mask = (target_time != args.padding_id).type(target_time.dtype)
+    target_time = target_time * args.time_scale 
+    window_start, window_end = get_window(times=target_time, window=args.window) 
+    events = get_events(
+        times=target_time, mask=mask, labels=target_label,
+        window_start=window_start, window_end=window_end)
+    #events_times = events.get_times(prepend_window=True)
+    prev_times, is_event, pos_delta_mask = get_prev_times( #
+        query=target_time,
+        events=events,
+        allow_window=True)
+    prev_times, prev_times_idx = prev_times
+    prev_times_idx = prev_times_idx - 1
+    prev_times_idx[prev_times_idx < 0] = 0
+    prev_labels = target_label[torch.arange(prev_times_idx.shape[0]).unsqueeze(-1), prev_times_idx]
+    past_events = get_events(
+        times=prev_times, mask=mask, labels=prev_labels,
+        window_start=window_start, window_end=window_end)
+    #print(pos_delta_mask[:,0])
+    #print(mask[:,0])
+    return past_events, target_time, target_label, mask

@@ -1,40 +1,15 @@
 import torch as th
-import torch.nn.functional as F
-import torch.nn as nn
 
-from tpps.pytorch.activations import ParametricSoftplus
 
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Dict
 
 from tpps.models.decoders.sahp_jd import SAHP_JD
 from tpps.models.base.process import Events
-
-from tpps.pytorch.models import MLP
-
-from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2, take_2_by_2
-from tpps.utils.stability import epsilon, check_tensor
-from tpps.pytorch.layers.dense import NonNegLinear
 
 class SAHP_DD(SAHP_JD):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/pdf/1907.07561.pdf
 
-    Args:
-        units_mlp: List of hidden layers sizes, including the output size.
-        activation_mlp: Activation functions. Either a list or a string.
-        constraint_mlp: Constraint of the network. Either `None`, nonneg or
-            softplus.
-        dropout_mlp: Dropout rates, either a list or a float.
-        activation_final_mlp: Last activation of the MLP.
-
-        mc_prop_est: Proportion of numbers of samples for the MC method,
-                     compared to the size of the input. (Default=1.).
-        emb_dim: Size of the embeddings (default=2).
-        temporal_scaling: Scaling parameter for temporal encoding
-        encoding: Way to encode the events: either times_only, or temporal.
-            Defaults to times_only.
-        marks: The distinct number of marks (classes) for the process. Defaults
-            to 1.
     """
     def __init__(
             self,

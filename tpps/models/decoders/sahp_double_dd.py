@@ -1,49 +1,71 @@
 import torch as th
+import torch.nn as nn
 
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Tuple, Dict
 
-from tpps.models.decoders.thp_jd import THP_JD
+from tpps.models.decoders.sahp import SAHP
+from tpps.models.decoders.base.decoder import Decoder
 from tpps.models.base.process import Events
 
+
+from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2, take_2_by_2
+from tpps.utils.stability import epsilon, check_tensor
 
 
-class THP_DD(THP_JD):
+class SAHP_Double_DD(Decoder):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/abs/2002.09291.pdf
     """
     def __init__(
             self,
             # MLP
             units_mlp: List[int],
-            n_mixture:int, 
+            activation_mlp: Optional[str] = "relu",
+            dropout_mlp: Optional[float] = 0.,
+            constraint_mlp: Optional[str] = None,
+            activation_final_mlp: Optional[str] = "parametric_softplus",
             # Other params
             mc_prop_est: Optional[float] = 1.,
             emb_dim: Optional[int] = 2,
             temporal_scaling: Optional[float] = 1.,
             encoding: Optional[str] = "times_only",
             time_encoding: Optional[str] = "relative",
-            marks: Optional[int] = 1,
-            mark_activation: Optional[str] = 'relu',
-            hist_time_grouping: Optional[str] = 'summation',
-            cond_ind : Optional[bool] = False,
+            marks: Optional[int] = 1, 
             **kwargs):
-        if len(units_mlp) < 2:
-            raise ValueError("Units of length at least 2 need to be specified")
-        super(THP_DD, self).__init__(
-            name="thp-dd",
+        super(SAHP_Double_DD, self).__init__(
+            name="sahp_double_dd",
+            input_size=units_mlp[0],
+            marks=marks,
+            **kwargs)
+        self.model_time = SAHP(
             units_mlp=units_mlp,
-            n_mixture=n_mixture,
+            activation_mlp=activation_mlp,
+            dropout_mlp=dropout_mlp,
+            constraint_mlp=constraint_mlp,
+            activation_final_mlp=activation_final_mlp,
             mc_prop_est=mc_prop_est,
             emb_dim=emb_dim,
             temporal_scaling=temporal_scaling,
             encoding=encoding,
             time_encoding=time_encoding,
-            marks=marks,
-            mark_activation=mark_activation,
-            hist_time_grouping=hist_time_grouping,
-            **kwargs)
-
+            marks=marks, 
+            **kwargs
+        )
+        self.model_mark = SAHP(
+            units_mlp=units_mlp,
+            activation_mlp=activation_mlp,
+            dropout_mlp=dropout_mlp,
+            constraint_mlp=constraint_mlp,
+            activation_final_mlp=activation_final_mlp,
+            mc_prop_est=mc_prop_est,
+            emb_dim=emb_dim,
+            temporal_scaling=temporal_scaling,
+            encoding=encoding,
+            time_encoding=time_encoding,
+            marks=marks, 
+            **kwargs
+        )
 
     def forward(self,
             events: Events,
@@ -56,17 +78,7 @@ class THP_DD(THP_JD):
             representations_mask: Optional[th.Tensor] = None,
             artifacts: Optional[dict] = None):
         
-        (query_representations,
-         intensity_mask) = self.get_query_representations(
-            events=events,
-            query=query,
-            prev_times=prev_times,
-            prev_times_idxs=prev_times_idxs,
-            pos_delta_mask=pos_delta_mask,
-            is_event=is_event,
-            representations=representations, 
-            representations_mask=representations_mask)  # [B,T,enc_size], [B,T]
-
+        
         intensity_mask = pos_delta_mask                                 # [B,T]
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
@@ -82,22 +94,34 @@ class THP_DD(THP_JD):
         history_representations_mark = take_3_by_2(                          
             representations_mark, index=prev_times_idxs)
 
-        log_ground_intensity = self.log_ground_intensity(
-                                        query=query, 
-                                        prev_times=prev_times, 
-                                        history_representations=history_representations_time)
+        log_ground_intensity = self.model_time.log_ground_intensity(
+                                                    query=query,
+                                                    prev_times=prev_times,
+                                                    history_representations=history_representations_time,
+                                                    intensity_mask=intensity_mask
+                                                )
         
-        log_mark_pmf = self.log_mark_pmf(
-                        query_representations=query_representations, 
-                        history_representations=history_representations_mark)
-
-        ground_intensity_integral = self.intensity_integral(
+        ground_intensity_integral = self.model_time.intensity_integral(
                                                 query=query, 
                                                 prev_times=prev_times,
                                                 prev_times_idxs=prev_times_idxs,
                                                 intensity_mask=intensity_mask,
                                                 representations=representations_time
-                                                )
+                                            )
+
+        log_marked_intensity = self.model_mark.log_intensity(
+                                            query=query,
+                                            prev_times=prev_times,
+                                            history_representations=history_representations_mark,
+                                            intensity_mask=intensity_mask
+                                        )
+        
+        marked_intensity = th.exp(log_marked_intensity)
+        log_mark_pmf = self.model_mark.log_mark_pmf(marked_intensity)
+
+        check_tensor(log_ground_intensity * intensity_mask)
+        check_tensor(ground_intensity_integral * intensity_mask, positive=True)
+        check_tensor(log_mark_pmf * intensity_mask.unsqueeze(-1))
 
         idx = th.arange(0,intensity_mask.shape[1]).to(intensity_mask.device)
         mask = intensity_mask * idx
@@ -108,7 +132,6 @@ class THP_DD(THP_JD):
         artifacts = {}
         artifacts['last_h_t'] = last_h_t.detach().cpu().numpy()
         artifacts['last_h_m'] = last_h_m.detach().cpu().numpy()
-
+        
 
         return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts
-

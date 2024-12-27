@@ -1,6 +1,3 @@
-from cmath import log
-import pdb
-
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
@@ -42,7 +39,7 @@ class ModularProcess(EncDecProcess):
 
         self.processes = processes
         for k, p in self.processes.items():
-            self.add_module(k, p) #torch.nn method, adds a child module to the current module.
+            self.add_module(k, p) 
         self.n_processes = len(processes)
         self.use_coefficients = args.use_coefficients
         self.coefficients = args.coefficients
@@ -61,7 +58,7 @@ class ModularProcess(EncDecProcess):
     def reset_parameters(self):
         if "poisson" in self.processes:
             init_constant = [
-                1. if x == "poisson" else -2. for x in self.processes] #Arbitrary choice ?
+                1. if x == "poisson" else -2. for x in self.processes]
             init_constant = th.Tensor(init_constant).to(
                 self.alpha.device).type(
                 self.alpha.dtype)
@@ -72,24 +69,6 @@ class ModularProcess(EncDecProcess):
     def artifacts(
             self, query: th.Tensor, events: Events, time_prediction = False, sampling=False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the (log) intensities and intensity integrals at query times
-        given events.
-
-        Args:
-            query: [B,T] Sequences of query times to evaluate the intensity
-                function.
-            events: [B,L] Times and labels of events.
-
-        Returns:
-            log_intensity: [B,T,M] The log intensities for each query time for
-                each mark (class).
-            intensity_integral: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T,M] Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        """
         # [B,T,M], [B,T,M], [B,T], Dict
         artifacts = {
             k: p.artifacts(query=query, events=events, time_prediction=time_prediction, sampling=sampling)
@@ -110,7 +89,6 @@ class ModularProcess(EncDecProcess):
                 alpha = F.softmax(alpha, dim=0)
             else:
                 alpha = F.relu(alpha)
-            #print('ALPHA', alpha, flush=True)   
             artifacts['alpha'] = alpha.detach().cpu().numpy().squeeze()
             artifacts['log_intensity_0'] = log_intensity[1, :, :, :].detach()
             artifacts['log_intensity_1'] = log_intensity[0, :, :, :].detach()

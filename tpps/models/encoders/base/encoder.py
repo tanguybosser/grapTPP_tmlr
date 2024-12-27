@@ -46,8 +46,6 @@ class Encoder(nn.Module, abc.ABC):
         times = events.get_times(prepend_window=True)      # [B,L+1]
         histories_mask = events.get_mask(prepend_window=True)  # [B,L+1]
 
-        # Creates a delta_t tensor, with first time set to zero
-        # Masks it and sets masked values to padding id
         prev_times, is_event, pos_delta_mask = get_prev_times(
             query=times,
             events=events,
@@ -58,10 +56,6 @@ class Encoder(nn.Module, abc.ABC):
             times = times - prev_times
 
         histories_mask = histories_mask * pos_delta_mask
-
-        #if self.encoding != "marks_only" and self.time_encoding == "relative": #This line should be commented imo, as otherwise the first event in sequences 
-                                                                                #is left out. 
-        #    histories_mask = histories_mask * is_event
 
         labels = events.labels
         labels = th.cat(

@@ -61,33 +61,6 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
             representations_mask: Optional[th.Tensor] = None,
             artifacts: Optional[dict] = None
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
-        """Compute the log_intensity and a mask
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-
-        """
         pass
 
 
@@ -106,7 +79,7 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
         pass
 
-
+    '''
     def forward(
             self,
             events: Events,
@@ -120,36 +93,7 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
             artifacts: Optional[dict] = None,
             sampling: Optional[bool] = False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-
-        """
+    
         marked_log_intensity, intensity_mask, artifacts = self.log_intensity(
             events=events,
             query=query,
@@ -198,73 +142,18 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
                 intensity_integrals,
                 intensity_mask,
                 artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
+    '''
+                
+    def log_mark_pmf(
+            self, 
+            marked_intensity:th.Tensor
+    ):
+        mark_pmf = marked_intensity/th.sum(marked_intensity, dim=-1).unsqueeze(-1)
+        log_mark_pmf = th.log(mark_pmf)
+        check_tensor(log_mark_pmf)
+        return log_mark_pmf
     
-    '''
-    def forward(
-            self,
-            events: Events,
-            query: th.Tensor,
-            prev_times: th.Tensor,
-            prev_times_idxs: th.Tensor,
-            pos_delta_mask: th.Tensor,
-            is_event: th.Tensor,
-            representations: th.Tensor,
-            representations_mask: Optional[th.Tensor] = None,
-            artifacts: Optional[dict] = None,
-            sampling: Optional[bool] = False
-    ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-
-        """
-        marked_log_intensity, intensity_mask, artifacts = self.log_intensity(
-            events=events,
-            query=query,
-            prev_times=prev_times,
-            prev_times_idxs=prev_times_idxs,
-            pos_delta_mask=pos_delta_mask,
-            is_event=is_event,
-            representations=representations,
-            representations_mask=representations_mask,
-            artifacts=artifacts)  # [B,T,M], [B,T], dict
-        
-        
-
-        check_tensor(marked_log_intensity)
-        check_tensor(intensity_integrals * intensity_mask.unsqueeze(-1),
-                     positive=True)
-        return (marked_log_intensity,
-                intensity_integrals,
-                intensity_mask,
-                artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
-    '''
-
+    
     def intensity_integral(
             self,
             query: th.Tensor,
@@ -275,7 +164,6 @@ class MCDecoder(VariableHistoryDecoder, abc.ABC):
             representations_mask: Optional[th.Tensor] = None,
             artifacts: Optional[dict] = None
             ):
-        
         
         # Create Monte Carlo samples and sort them
         n_est = int(self.mc_prop_est)

@@ -5,12 +5,10 @@ import torch.nn as nn
 from typing import Dict, Optional, Tuple, List
 
 from tpps.models.decoders.base.variable_history import VariableHistoryDecoder
-from tpps.pytorch.models import LAYER_CLASSES
 
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
-from tpps.utils.encoding import encoding_size
 
 class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
     """Analytic decoder process, uses a closed form for the intensity
@@ -82,39 +80,7 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
             artifacts: Optional[dict] = None, 
             sampling: Optional[bool] = False
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of window start and
-                each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T] Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        """
-        
+    
         query.requires_grad = True
         
         batch_size = query.shape[0]
@@ -133,11 +99,10 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         
         b,l,k,c = query.shape[0], query.shape[1], self.marks, self.n_mixture
         history_representations = take_3_by_2(
-            representations, index=prev_times_idxs)  # [B,T,D] actually history 
-        
+            representations, index=prev_times_idxs)  # [B,T,D] 
         delta_t = query - prev_times  # [B,T]
         delta_t = delta_t.unsqueeze(-1).unsqueeze(-1)  # [B,T,1, 1]
-        delta_t = th.relu(delta_t) #Just to ensure that the deltas are positive ? 
+        delta_t = th.relu(delta_t) 
         delta_t = delta_t + (delta_t == 0).float() * epsilon(
         dtype=delta_t.dtype, device=delta_t.device)
         delta_t = th.log(delta_t)
@@ -199,36 +164,10 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         ground_intensity_integrals = - th.log(one_min_cum_f) + epsilon(eps=1e-7,
             dtype=cum_f.dtype, device=cum_f.device)
         
-        #one_min_cum_f = one_min_cum_f.unsqueeze(-1) #[B,T,1]
-        
-        #marked_log_intensity = th.log(f_joint / one_min_cum_f) #[B,T,K]
-        #marked_log_intensity = marked_log_intensity + th.log(p_m)  # [B,T,K]
-
-        #marked_intensity_itg = base_intensity_itg.unsqueeze(dim=-1)  # [B,T,1]
-        
-        #Trick to have Lambda(t) = \sum_k(Lambda_k(t))
-        #This does not return the true Lambda_k(t), but we don't need it later, only Lambda(t)
-        #ones = th.ones_like(p_m)
-        #marked_intensity_itg = (marked_intensity_itg / self.marks) * ones  
-
-        #intensity_mask = pos_delta_mask  # [B,T]
         if representations_mask is not None:
             history_representations_mask = take_2_by_2(
                 representations_mask, index=prev_times_idxs)  # [B,T]
             intensity_mask = intensity_mask * history_representations_mask
-
-        #artifacts_decoder = {
-        #    "base_log_intensity": base_log_intensity,
-        #    "base_intensity_integral": base_intensity_itg,
-        #    "mark_probability": p_m}
-        #if artifacts is None:
-        #    artifacts = {'decoder': artifacts_decoder}
-        #else:
-        #    artifacts['decoder'] = artifacts_decoder
-
-        #check_tensor(marked_log_intensity * intensity_mask.unsqueeze(-1))
-        #check_tensor(marked_intensity_itg * intensity_mask.unsqueeze(-1),
-        #            positive=True)
         
         check_tensor(log_ground_intensity)
         check_tensor(log_mark_pmf)
@@ -243,7 +182,6 @@ class JointLogNormalMixtureDecoder(VariableHistoryDecoder):
         artifacts = {}
         artifacts['last_h'] = last_h.detach().cpu().numpy()
     
-
         return log_ground_intensity, log_mark_pmf, ground_intensity_integrals, intensity_mask, artifacts 
 
     def get_mark_activation(self, mark_activation):

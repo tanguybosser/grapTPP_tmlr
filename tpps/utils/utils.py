@@ -25,3 +25,25 @@ def smallest_positive(inputs, dim):
     result = th.min(shifted_matrix, dim=dim)                      # [B,T]
 
     return result, is_candidate                                  # [B,T], [B,T]
+
+def detach(x: th.Tensor):
+    return x.cpu().detach().numpy()
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def count_parameters_enc(model):
+    enc, rest = 0,0
+    total = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    for n, p in model.named_parameters():
+        if p.requires_grad:
+            if 'encoder' in n:
+                enc += p.numel()
+            else:
+                rest += p.numel()
+    enc_prop = enc/total
+    rest_prop = rest/total 
+    print(f'Encoder Total: {enc}')
+    print(f'Rest Total: {rest}')
+    print(f'Encoder Proportion: {enc_prop}')
+    print(f'Rest Proportion: {rest_prop}')

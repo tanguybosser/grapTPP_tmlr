@@ -1,5 +1,4 @@
 import torch as th
-import torch.nn.functional as F
 import torch.nn as nn
 
 from tpps.pytorch.activations import ParametricSoftplus
@@ -9,32 +8,12 @@ from typing import List, Optional, Tuple, Dict
 from tpps.models.decoders.base.monte_carlo import MCDecoder
 from tpps.models.base.process import Events
 
-from tpps.pytorch.models import MLP
-
 from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
-from tpps.pytorch.layers.dense import NonNegLinear
 
 class SAHP(MCDecoder):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/pdf/1907.07561.pdf
-
-    Args:
-        units_mlp: List of hidden layers sizes, including the output size.
-        activation_mlp: Activation functions. Either a list or a string.
-        constraint_mlp: Constraint of the network. Either `None`, nonneg or
-            softplus.
-        dropout_mlp: Dropout rates, either a list or a float.
-        activation_final_mlp: Last activation of the MLP.
-
-        mc_prop_est: Proportion of numbers of samples for the MC method,
-                     compared to the size of the input. (Default=1.).
-        emb_dim: Size of the embeddings (default=2).
-        temporal_scaling: Scaling parameter for temporal encoding
-        encoding: Way to encode the events: either times_only, or temporal.
-            Defaults to times_only.
-        marks: The distinct number of marks (classes) for the process. Defaults
-            to 1.
     """
     def __init__(
             self,
@@ -80,32 +59,6 @@ class SAHP(MCDecoder):
             intensity_mask: th.Tensor
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
         """Compute the log_intensity and a mask
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures.
-
         """
         
         mu = self.activation(self.mu(history_representations)) #[B,T,K]

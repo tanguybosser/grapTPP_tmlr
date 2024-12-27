@@ -113,7 +113,7 @@ class FixedHistoryEncoder(Encoder):
             h_prev, h_prev_mask = build_histories(
                 query=events.times, events=events,
                 history_size=self.history_size - 1)          # [B,L,H-1], [B,L]
-            histories = th.cat([h_prev, histories], dim=-1)  # [B,L,H] #Why add event at end of history ? 
+            histories = th.cat([h_prev, histories], dim=-1)  # [B,L,H] 
             histories_mask = histories_mask * h_prev_mask    # [B,L]
 
         # Add on a masked history for the window start representation

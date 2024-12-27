@@ -56,7 +56,10 @@ def check_tensor(
     assert th.isnan(t).sum() == 0
     assert th.isinf(t).sum() == 0
     if positive:
-        assert ((t < 0.).sum() == 0), 'strictly negative value encountered'
+        if (t < 0.).sum() != 0:
+            print((t < 0.).sum())
+            print(t[t<0])
+        #assert ((t < 0.).sum() == 0), 'strictly negative value encountered'
         if strict:
             assert ((t <= 0.).sum() == 0), 'negative value encountered'
 

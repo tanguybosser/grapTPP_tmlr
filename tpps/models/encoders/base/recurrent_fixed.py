@@ -74,7 +74,7 @@ class RecurrentFixedEncoder(FixedHistoryEncoder):
         
         seq_lens = th.sum(prev_events_idxs >= 0, dim=-1) #[B,1+L]
         seq_lens = th.flatten(seq_lens) #[B*(1+L)]
-        seq_lens[seq_lens == 0] = 1 #Pack sequences does not allow 0 length sequences. 
+        seq_lens[seq_lens == 0] = 1  
         b,l,h,d = encoded_history.shape
         
         encoded_history_3d = encoded_history.view(b*l, h, d) #[B*(1+L), H, D]
@@ -86,7 +86,6 @@ class RecurrentFixedEncoder(FixedHistoryEncoder):
         hidden = output.squeeze() # [B*(1+L), D_hidden]
         hidden = hidden.view(b, l, self.hidden_size) #[B,1+L,D_hidden]
         hidden = F.normalize(hidden, dim=-1, p=2)
-        #Add normalization layer ? 
         representations = self.mlp(hidden) #
         
         return (representations, history_mask, dict())

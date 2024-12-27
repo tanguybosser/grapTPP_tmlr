@@ -1,5 +1,4 @@
 import torch as th
-import torch.nn.functional as F
 import torch.nn as nn
 
 from tpps.pytorch.activations import ParametricSoftplus
@@ -9,32 +8,15 @@ from typing import List, Optional, Tuple, Dict
 from tpps.models.decoders.base.monte_carlo import MCDecoder
 from tpps.models.base.process import Events
 
-from tpps.pytorch.models import MLP
 
 from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
 
+from tpps.utils.nnplus import non_neg_param
 
 class THP(MCDecoder):
     """A mlp decoder based on Monte Carlo estimations. See https://arxiv.org/abs/2002.09291.pdf
-
-    Args:
-        units_mlp: List of hidden layers sizes, including the output size.
-        activation_mlp: Activation functions. Either a list or a string.
-        constraint_mlp: Constraint of the network. Either `None`, nonneg or
-            softplus.
-        dropout_mlp: Dropout rates, either a list or a float.
-        activation_final_mlp: Last activation of the MLP.
-
-        mc_prop_est: Proportion of numbers of samples for the MC method,
-                     compared to the size of the input. (Default=1.).
-        emb_dim: Size of the embeddings (default=2).
-        temporal_scaling: Scaling parameter for temporal encoding
-        encoding: Way to encode the events: either times_only, or temporal.
-            Defaults to times_only.
-        marks: The distinct number of marks (classes) for the process. Defaults
-            to 1.
     """
     def __init__(
             self,
@@ -68,55 +50,38 @@ class THP(MCDecoder):
         self.w_t = nn.Linear(in_features=1, out_features=marks)
         self.w_h = nn.Linear(in_features=units_mlp[0], out_features=marks)
         self.activation = ParametricSoftplus(units=marks)
+        self.mu = nn.Parameter(th.Tensor(self.marks))
 
     def log_intensity(
             self,
             query: th.Tensor,
             prev_times: th.Tensor,
-            history_representations: th.Tensor
+            history_representations: th.Tensor, 
+            intensity_mask: th.Tensor
     ) -> Tuple[th.Tensor, th.Tensor, Dict]:
         """Compute the log_intensity and a mask
 
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensities_mask: [B,T]   Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: Some measures.
 
         """
+        #self.w_t.weight.data = non_neg_param(self.w_t.weight.data)
         
         prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
-
-        #delta_t = (query - prev_times)/prev_times
-        delta_t = query - prev_times
+       
+        ##MODIF##
+        delta_t = (query - prev_times) * intensity_mask  + epsilon(dtype=query.dtype, device=query.device, eps=1e-7)
+        delta_t = (query - prev_times)/prev_times
         check_tensor(delta_t)
-        delta_t = delta_t.unsqueeze(-1).float()
+        delta_t = delta_t.unsqueeze(-1)
 
+
+        #check_tensor(delta_t, positive=True, strict=True)
+        #delta_t = delta_t.unsqueeze(-1).float()
+        #delta_t = th.log(delta_t)
+        
         w_delta_t = self.w_t(delta_t)
         w_history = self.w_h(history_representations)
         outputs = self.activation(w_delta_t + w_history)
-
         outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
-
         return th.log(outputs)
 
     def log_ground_intensity(self,
@@ -128,12 +93,12 @@ class THP(MCDecoder):
         log_marked_intensity = self.log_intensity(
                                         query=query,
                                         prev_times=prev_times,
-                                        history_representations=history_representations)
+                                        history_representations=history_representations,
+                                        intensity_mask=intensity_mask)
 
         ground_intensity = th.sum(th.exp(log_marked_intensity), dim=-1)
 
         return th.log(ground_intensity)
-
 
 
     def forward(self,
@@ -159,9 +124,14 @@ class THP(MCDecoder):
         log_marked_intensity = self.log_intensity(
                                                 query=query,
                                                 prev_times=prev_times,
-                                                history_representations=history_representations)
+                                                history_representations=history_representations,
+                                                intensity_mask=intensity_mask)
         
+        self.mu.data = non_neg_param(self.mu.data)
+        check_tensor(self.mu.data, positive=True)
+        ##MODIF 
         marked_intensity = th.exp(log_marked_intensity)
+        marked_intensity = marked_intensity + self.mu
 
         ground_intensity = th.sum(marked_intensity, dim=-1)
         log_ground_intensity = th.log(ground_intensity)

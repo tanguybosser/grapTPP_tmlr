@@ -1,12 +1,12 @@
 import torch as th
 import torch.nn as nn
 
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, List
 
 from tpps.models.decoders.rmtpp import RMTPPDecoder
 from tpps.utils.events import Events
-from tpps.utils.index import take_3_by_2, take_2_by_2
-from tpps.utils.stability import epsilon, subtract_exp, check_tensor
+
+from tpps.utils.stability import epsilon
 
 class RMTPP_JD(RMTPPDecoder):
     """Analytic decoder process, uses a closed form for the intensity
@@ -26,6 +26,7 @@ class RMTPP_JD(RMTPPDecoder):
             mark_activation: Optional[str] = 'relu',
             hist_time_grouping: Optional[str] = 'summation',
             name: Optional[str] = 'rmtpp-jd',
+            cond_ind: Optional[bool] = False,
             **kwargs):
         super(RMTPP_JD, self).__init__(
             name=name,
@@ -35,7 +36,12 @@ class RMTPP_JD(RMTPPDecoder):
             encoding=encoding,
             mark_activation=mark_activation,
             **kwargs)
-        self.mark_time = nn.Linear(
+        self.cond_ind = cond_ind
+        if self.cond_ind: 
+            self.mark_time = nn.Linear(
+                in_features=self.input_size, out_features=units_mlp[1])
+        else:
+            self.mark_time = nn.Linear(
                 in_features=self.encoding_size + self.input_size, out_features=units_mlp[1])
 
         
@@ -43,8 +49,11 @@ class RMTPP_JD(RMTPPDecoder):
             self, 
             query_representations:th.Tensor, 
             history_representations:th.Tensor):
-        
-        history_times = th.cat((history_representations, query_representations), dim=-1)
+        if self.cond_ind: 
+            history_times = history_representations
+        else: 
+            history_times = th.cat((history_representations, query_representations), dim=-1)
+
         p_m = th.softmax(
                 self.marks2(
                     self.mark_activation(self.mark_time(history_times))), dim=-1)

@@ -1,6 +1,5 @@
 import math
 import torch as th
-import torch.nn as nn
 
 from typing import Dict, Optional, Tuple, List
 
@@ -9,16 +8,11 @@ from tpps.models.decoders.log_normal_mixture_jd import LogNormalMixture_JD
 from tpps.utils.events import Events
 from tpps.utils.index import take_3_by_2, take_2_by_2
 from tpps.utils.stability import epsilon, check_tensor
-from tpps.utils.encoding import encoding_size
 
 class LogNormalMixture_DD(LogNormalMixture_JD):
     """Analytic decoder process, uses a closed form for the intensity
     to train the model.
     See https://arxiv.org/pdf/1909.12127.pdf.
-
-    Args:
-        marks: The distinct number of marks (classes) for the process. Defaults
-            to 1.
     """
     def __init__(
             self,
@@ -30,7 +24,6 @@ class LogNormalMixture_DD(LogNormalMixture_JD):
             embedding_constraint: Optional[str] = None,
             emb_dim: Optional[int] = 2,
             mark_activation: Optional[str] = 'relu',
-            hist_time_grouping: Optional[str] = 'summation',
             cond_ind : Optional[bool] = False,
             **kwargs):
         super(LogNormalMixture_DD, self).__init__(
@@ -43,6 +36,7 @@ class LogNormalMixture_DD(LogNormalMixture_JD):
             embedding_constraint=embedding_constraint,
             emb_dim=emb_dim,
             mark_activation=mark_activation,
+            cond_ind=cond_ind,
             **kwargs)
         
 
@@ -58,38 +52,6 @@ class LogNormalMixture_DD(LogNormalMixture_JD):
             representations_mask: Optional[th.Tensor] = None,
             artifacts: Optional[dict] = None, 
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the intensities for each query time given event
-        representations.
-
-        Args:
-            events: [B,L] Times and labels of events.
-            query: [B,T] Times to evaluate the intensity function.
-            prev_times: [B,T] Times of events directly preceding queries.
-            prev_times_idxs: [B,T] Indexes of times of events directly
-                preceding queries. These indexes are of window-prepended
-                events.
-            pos_delta_mask: [B,T] A mask indicating if the time difference
-                `query - prev_times` is strictly positive.
-            is_event: [B,T] A mask indicating whether the time given by
-                `prev_times_idxs` corresponds to an event or not (a 1 indicates
-                an event and a 0 indicates a window boundary).
-            representations: [B,L+1,D] Representations of window start and
-                each event.
-            representations_mask: [B,L+1] Mask indicating which representations
-                are well-defined. If `None`, there is no mask. Defaults to
-                `None`.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T] Which intensities are valid for further
-                computation based on e.g. sufficient history available.
-            artifacts: A dictionary of whatever else you might want to return.
-
-        """
         
         query.requires_grad = True
         
@@ -113,7 +75,7 @@ class LogNormalMixture_DD(LogNormalMixture_JD):
         representations_mark = representations[batch_size:,:,:]
         
         history_representations_time = take_3_by_2(
-            representations_time, index=prev_times_idxs)  # [B,T,D] actually history 
+            representations_time, index=prev_times_idxs)  # [B,T,D] 
         history_representations_mark = take_3_by_2(
             representations_mark, index=prev_times_idxs)
         

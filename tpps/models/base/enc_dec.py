@@ -1,12 +1,6 @@
-import pdb
-
 from numpy import rate
 
 import torch as th
-import torch.distributions as td
-import math
-import matplotlib
-import matplotlib.pyplot as plt
 
 from typing import Dict, Optional, Tuple
 
@@ -15,9 +9,10 @@ from tpps.models.encoders.base.encoder import Encoder
 from tpps.models.base.process import Process
 from tpps.utils.events import Events
 from tpps.utils.history_bst import get_prev_times
-from tpps.utils.index import take_2_by_1
 from tpps.utils.logical import xor
 from tpps.utils.stability import epsilon, check_tensor
+
+from tpps.utils.dist_utils import icdf_from_cdf
 
 class EncDecProcess(Process):
     """A parametric encoder decoder process.
@@ -35,7 +30,6 @@ class EncDecProcess(Process):
                  multi_labels: Optional[bool] = False,
                  decoder_type: Optional[str] = 'joint',
                  **kwargs):
-        # TODO: Fix this hack that allows modular to work.
         if encoder is not None:
             assert encoder.marks == decoder.marks
             name = '_'.join([encoder.name, decoder.name])
@@ -74,7 +68,7 @@ class EncDecProcess(Process):
             events: [B,L] Times and labels of events.
 
         Returns:
-            intensity: [B,T,M] The intensities for each query time for each
+            intensity: [B,T,M] The intensities for each query time and for each
                 mark (class).
             intensity_mask: [B,T,M] Which intensities are valid for further
                 computation based on e.g. sufficient history available.
@@ -95,13 +89,14 @@ class EncDecProcess(Process):
             events: [B,L] Times and labels of events.
 
         Returns:
-            log_density: [B,T,M] The densities for each query time for each
+            log_density: [B,T,M] The log joint densities for each query time and for each
+                mark (class).
+            log_mark_density: [B,T,M] The log mark PMFs for each query time and for each
                 mark (class).
             density_mask: [B,T,M] Which intensities are valid for further
                 computation based on e.g. sufficient history available.
 
         """
-        # TODO: Intensity integral should be summed over marks.
         log_ground_intensity, log_mark_density, ground_intensity_integral ,intensity_mask, _ = self.artifacts(
             query=query, events=events)
         
@@ -122,15 +117,19 @@ class EncDecProcess(Process):
         return log_joint_density, log_mark_density, intensity_mask
 
     def neg_log_likelihood(
-            self, events: Events, test=False, 
-            loss='nll', training_type='full') -> Tuple[th.Tensor, th.Tensor, th.Tensor, th.Tensor, Dict]:
+            self, events: Events, test=False, time_scaling=None 
+            ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, th.Tensor, Dict]:
         """Compute the negative log likelihood of events.
 
         Args:
             events: [B,L] Times and labels of events.
+            test: If True, computes the CDF at query times.
         Returns:
-            nll: [B] The negative log likelihoods for each sequence.
-            nll_mask: [B] Which neg_log_likelihoods are valid for further
+            loss_t: [B] The time loss.
+            loss_m: [B] The mark loss.
+            loss_w: [B] The window loss.
+            
+            loss_mask: [B] Which losses are valid for further
                 computation based on e.g. at least one element in sequence has
                 a contribution.
             artifacts: Other useful items, e.g. the relevant window of the
@@ -168,6 +167,11 @@ class EncDecProcess(Process):
         loss_t = -th.sum(log_ground_intensity, dim=-1) + th.sum(ground_intensity_integral, dim=-1)
         loss_m = -th.sum(true_log_mark_density, dim=-1)
         loss_w = window_integral
+        artifacts['loss_t'] = loss_t
+        artifacts['loss_m'] = loss_m 
+        artifacts['loss_w'] = loss_w       
+        if time_scaling is not None:
+            loss_t = 1/(time_scaling) * loss_t 
 
         loss_mask = th.sum(intensity_mask, dim=-1)                    # [B]
         loss_mask = (loss_mask > 0.).type(intensity_mask.dtype)                    # [B]
@@ -175,8 +179,7 @@ class EncDecProcess(Process):
         no_window_integral = 1 - add_window_integral                    # [B]
         window_mask = xor(defined_window_integral, no_window_integral)  # [B]
         loss_mask = loss_mask * window_mask
-
-        #Cumulative density#    
+        #CDF computation    
         if test:
             cumulative_density = 1 - th.exp(-ground_intensity_integral) #[B, L]
             cumulative_density[~intensity_mask.bool()] = -1      #[B,L]
@@ -191,9 +194,9 @@ class EncDecProcess(Process):
         return loss_t, loss_m, loss_w, loss_mask, artifacts 
     
     def artifacts(
-            self, query: th.Tensor, events: Events, time_prediction = False, sampling = False
+            self, query: th.Tensor, events: Events, time_prediction = False, sampling = False, prev_times=None
     ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, Dict]:
-        """Compute the (log) intensities and intensity integrals at query times
+        """Compute the (log) ground intensities, log mark PMF, and ground intensity integrals at query times
         given events.
 
         Args:
@@ -202,11 +205,11 @@ class EncDecProcess(Process):
             events: [B,L] Times and labels of events.
 
         Returns:
-            log_intensity: [B,T,M] The log intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
-            intensities_mask: [B,T,M] Which intensities are valid for further
+            log_ground_intensity: [B,T] The log ground intensities for each query time.
+            log_mark_density: [B,T,M] The log ground PMF of marks for each query time.
+            ground_intensity_integrals: [B,T] The integral of the ground intensity from
+                the most recent event to the query time.
+            intensities_mask: [B,T,M] Which intensities (PMF, integrals) are valid for further
                 computation based on e.g. sufficient history available.
             artifacts: A dictionary of whatever else you might want to return.
 
@@ -220,14 +223,17 @@ class EncDecProcess(Process):
             representations_mark, representations_mask, artifacts = self.encode(
                 events=events, encoding_type='encoder_mark')
             representations = th.cat((representations_time, representations_mark), 0) #[2B, L+1, D] [B, L+1]
-        prev_times, is_event, pos_delta_mask = get_prev_times( #
-            query=query,
-            events=events,
-            allow_window=True,
-            time_prediction=time_prediction,
-            sampling=sampling)# ([B,T],[B,T]), [B,T], [B,T]
         
-        prev_times, prev_times_idxs = prev_times  # [B,T], [B,T]
+        if prev_times is None:
+            prev_times, is_event, pos_delta_mask = get_prev_times( #
+                                                        query=query,
+                                                        events=events,
+                                                        allow_window=True,
+                                                        time_prediction=time_prediction,
+                                                        sampling=sampling)# ([B,T],[B,T]), [B,T], [B,T]
+            prev_times, prev_times_idxs = prev_times  # [B,T], [B,T]
+        else: 
+            prev_times, is_event, pos_delta_mask, prev_times_idxs = prev_times
         return self.decode(
             events=events,
             query=query,
@@ -286,10 +292,10 @@ class EncDecProcess(Process):
             artifacts: A dictionary of whatever else you might want to return.
 
         Returns:
-            log_intensity: [B,T,M] The intensities for each query time for
-                each mark (class).
-            intensity_integrals: [B,T,M] The integral of the intensity from
-                the most recent event to the query time for each mark.
+            log_ground_intensity: [B,T] The log ground intensities for each query times.
+            log_mark_density: [B,T,M] The log mark PMFs for each query times.
+            ground_intensity_integrals: [B,T] The integral of the ground intensity from
+                the most recent event to the query time.
             intensities_mask: [B,T] Which intensities are valid for further
                 computation based on e.g. sufficient history available.
             artifacts: A dictionary of whatever else you might want to return.
@@ -307,7 +313,7 @@ class EncDecProcess(Process):
             artifacts=artifacts)
 
     def cdf(
-            self, query: th.Tensor, events: Events
+            self, query: th.Tensor, events: Events, prev_times=None
     ) -> Tuple[th.Tensor, th.Tensor]:
         """Compute the cdf at query times given events.
 
@@ -322,15 +328,14 @@ class EncDecProcess(Process):
                 computation based on e.g. sufficient history available.
 
         """
-        log_intensity, intensity_integral, intensity_mask, _ = self.artifacts(
-            query=query, events=events)
-        ground_intensity_integral = intensity_integral.sum(-1)
+        log_ground_intensity, log_mark_density, ground_intensity_integral ,intensity_mask, _  = self.artifacts(
+            query=query, events=events, prev_times=prev_times)
         cdf = 1 - th.exp(-ground_intensity_integral)
         return cdf, intensity_mask
     
 
     def one_minus_cdf(
-            self, query: th.Tensor, events: Events
+            self, query: th.Tensor, events: Events, prev_times=None
     ) -> Tuple[th.Tensor, th.Tensor]:
         """Compute the 1-cdf at query times given events.
 
@@ -345,8 +350,24 @@ class EncDecProcess(Process):
                 computation based on e.g. sufficient history available.
 
         """
-        log_intensity, intensity_integral, intensity_mask, _ = self.artifacts(
-            query=query, events=events)
-        ground_intensity_integral = intensity_integral.sum(-1)
+        log_ground_intensity, log_mark_density, ground_intensity_integral ,intensity_mask, _ = self.artifacts(
+            query=query, events=events, prev_times=prev_times)
         one_minus_cdf = th.exp(-ground_intensity_integral)
         return one_minus_cdf, intensity_mask
+    
+    
+
+    def icdf(self, alpha, past_events, low=None, high=None, all_events=False, prev_times=None):
+        #Alpha View must occur before function call 
+        times = past_events.get_times() #[B,L]
+        epsilon = 1e-7
+        if low is None:
+            low = times + epsilon
+        if high is None:
+            #high = last_observed_time + 100   # This works because the maximum inter-event time is 10
+            high = times + 10
+        def one_minus_cdf(query):
+            one_minus_cdf_value, cdf_mask = self.one_minus_cdf(query=query, events=past_events, prev_times=prev_times)
+            return one_minus_cdf_value
+        times = icdf_from_cdf(one_minus_cdf, alpha, low=low, high=high)
+        return times

@@ -51,6 +51,8 @@ class HawkesDecoder(Decoder):
             events=events,
             query=query,
             prev_times=prev_times,
+            prev_times_idxs=prev_times_idxs, 
+            pos_delta_mask=pos_delta_mask, 
             is_event=is_event,
             alpha=self.alpha,
             beta=self.beta,

@@ -36,14 +36,22 @@ from tpps.models.decoders.rmtpp_dd import RMTPP_DD
 from tpps.models.decoders.mlp_cm import MLPCmDecoder
 from tpps.models.decoders.mlp_cm_jd import MLPCm_JD
 from tpps.models.decoders.mlp_cm_dd import MLPCm_DD 
+from tpps.models.decoders.mlp_cm_double import FNN_Double
+from tpps.models.decoders.mlp_cm_double_dd import FNN_Double_DD
+
 
 from tpps.models.decoders.thp import THP
 from tpps.models.decoders.thp_jd import THP_JD
 from tpps.models.decoders.thp_dd import THP_DD
+from tpps.models.decoders.thp_double import THP_Double
+from tpps.models.decoders.thp_double_dd import THP_Double_DD
+
 
 from tpps.models.decoders.sahp import SAHP
 from tpps.models.decoders.sahp_jd import SAHP_JD
 from tpps.models.decoders.sahp_dd import SAHP_DD
+from tpps.models.decoders.sahp_double import SAHP_Double
+from tpps.models.decoders.sahp_double_dd import SAHP_Double_DD
 
 from tpps.models.decoders.hawkes import HawkesDecoder
 
@@ -89,12 +97,21 @@ DECODER_DISJOINT_CLASSES = {
     "smurf-thp-dd":SmurfTHP_DD
     }
 
+DECODER_DOUBLE_CLASSES = {
+    "thp-double": THP_Double,
+    "thp-double-dd": THP_Double_DD,
+    "sahp-double": SAHP_Double,
+    "sahp-double-dd": SAHP_Double_DD,
+    "mlp-cm-double": FNN_Double,
+    "mlp-cm-double-dd": FNN_Double_DD,
+}
 
-DECODER_CLASSES = {**DECODER_JOINT_CLASSES, **DECODER_DISJOINT_CLASSES}
+
+DECODER_CLASSES = {**DECODER_JOINT_CLASSES, **DECODER_DISJOINT_CLASSES, **DECODER_DOUBLE_CLASSES}
 
 
 ENCODER_NAMES = sorted(list(ENCODER_CLASSES.keys()))
-DECODER_NAMES = sorted(list(DECODER_JOINT_CLASSES.keys()) + list(DECODER_DISJOINT_CLASSES.keys()))
+DECODER_NAMES = sorted(list(DECODER_CLASSES.keys()))
 
 
 CLASSES = {"encoder": ENCODER_CLASSES, "encoder_histtime": ENCODER_CLASSES, "encoder_histmark": ENCODER_CLASSES, 
