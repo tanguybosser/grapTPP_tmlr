@@ -194,11 +194,14 @@ cos_output/
 data_processing/
 intensity/
 simulations/
+trainings/
 
 confict_gradients.ipynb
+make_figures.ipynb
 drawings.ipynb
 figures.ipynb
 tabular_results.ipynb
 TODO.md
 trainings.ipynb
- 
+requirements-tick.txt
+NOTICE.txt 
