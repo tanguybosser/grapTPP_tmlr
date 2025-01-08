@@ -1,10 +1,8 @@
 import sys, os
 sys.dont_write_bytecode = True
-sys.path.append(os.path.abspath(os.path.join('..', 'neurips')))
 
 import json
 import numpy as np
-import os
 import time
 import pickle as pkl
 from collections import defaultdict
@@ -44,12 +42,6 @@ def get_loss(
 ) -> Tuple[th.Tensor, th.Tensor, Dict]:
     times, labels = batch["times"], batch["labels"]
     labels = (labels != 0).type(labels.dtype) 
-    ''''
-    if dynamic_batch_length:
-        seq_lens = batch["seq_lens"]
-        max_seq_len = seq_lens.max()
-        times, labels = times[:, :max_seq_len], labels[:, :max_seq_len] 
-    '''
     mask = (times != args.padding_id).type(times.dtype)
     times = times * args.time_scale 
     window_start, window_end = get_window(times=times, window=args.window) 
@@ -263,7 +255,7 @@ def train(
                     time_grads[name] = grad
             loss_mark.backward()
             for name, p in model.named_parameters():
-                if p.requires_grad:
+                if p.requires_grad: 
                     #Grads are accumulated, so we must subtract the time grads to get the mark grads. 
                     mark_grads[name] = p.grad.data.detach().clone().cpu().view(-1) - time_grads[name]            
             dot_products, grad_sim, grad_tpi = compute_grad_metrics(time_grads,
@@ -411,9 +403,6 @@ def main(args: Namespace):
         save_model(model, args, exp_name)
         return 
     model = get_model(args)
-    num_params = count_parameters(model)
-    count_parameters_enc(model)
-    print('NUM OF TRAINABLE PARAMETERS : {}'.format(num_params))
     print("INSTATIATED MODEL : {}/{}/{} on dataset {}".format(args.encoder_encoding, args.encoder, args.decoder, args.dataset))
     model, images_urls, train_metrics, val_metrics = train(
         model, args=args, loader=loaders["train"],

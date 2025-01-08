@@ -112,7 +112,8 @@ class THP_Double_DD(Decoder):
         log_marked_intensity = self.model_mark.log_intensity(
                                             query=query,
                                             prev_times=prev_times,
-                                            history_representations=history_representations_mark
+                                            history_representations=history_representations_mark,
+                                            intensity_mask=intensity_mask
                                         )
         
         marked_intensity = th.exp(log_marked_intensity)
