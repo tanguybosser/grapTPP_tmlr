@@ -10,7 +10,7 @@ from tpps.pytorch.models import MLP
 
 from tpps.utils.encoding import encoding_size
 from tpps.utils.index import take_3_by_2
-from tpps.utils.stability import epsilon, check_tensor
+from tpps.utils.stability import epsilon
 
 class MLPMCDecoder(MCDecoder):
     """A mlp decoder based on Monte Carlo estimations.
@@ -131,6 +131,5 @@ class MLPMCDecoder(MCDecoder):
         outputs = self.mlp(hidden)                          # [B,T,output_size]
 
         outputs = outputs + epsilon(dtype=outputs.dtype, device=outputs.device)
-        #print('0?', th.sum(outputs < 0)) 
 
         return th.log(outputs), intensity_mask, artifacts 

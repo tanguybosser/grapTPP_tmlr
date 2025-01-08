@@ -65,7 +65,7 @@ class ConditionalPoissonDecoder(Decoder):
 
         delta_t = query - prev_times                       # [B,T]
         delta_t = delta_t.unsqueeze(dim=-1)                # [B,T,1]
-        intensity_integrals = outputs * delta_t            # [B,T,M] #Assumes constant intensity between two events. 
+        intensity_integrals = outputs * delta_t            # [B,T,M] 
 
         intensity_mask = pos_delta_mask  # [B,T]
         if representations_mask is not None and sampling is False:

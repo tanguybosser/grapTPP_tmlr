@@ -133,14 +133,6 @@ class RMTPPDecoder(VariableHistoryDecoder):
         ground_intensity_integrals = ground_intensity_integrals + poisson_integral 
          
         x = ground_intensity_integrals * intensity_mask
-
-        #print('diff', query[0,:10]-prev_times[0,:10])
-        '''
-        if (x < 0).any():
-            print('query', query[x<0])
-            print('previous', prev_times[x<0])
-            print('query-pre',(query[x<0]-prev_times[x<0]).data)
-        '''
         check_tensor(ground_intensity_integrals * intensity_mask,
                      positive=True)
         
