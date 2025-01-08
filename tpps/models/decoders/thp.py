@@ -50,6 +50,7 @@ class THP(MCDecoder):
         self.w_t = nn.Linear(in_features=1, out_features=marks)
         self.w_h = nn.Linear(in_features=units_mlp[0], out_features=marks)
         self.activation = ParametricSoftplus(units=marks)
+        self.mu = nn.Parameter(th.Tensor(self.marks))
 
     def log_intensity(
             self,
@@ -62,11 +63,21 @@ class THP(MCDecoder):
 
 
         """
-        self.w_t.weight.data = non_neg_param(self.w_t.weight.data)
+        #self.w_t.weight.data = non_neg_param(self.w_t.weight.data)
+        
         prev_times = prev_times + epsilon(dtype=prev_times.dtype, device=prev_times.device)
-        delta_t = query - prev_times
+       
+        ##MODIF##
+        delta_t = (query - prev_times) * intensity_mask  + epsilon(dtype=query.dtype, device=query.device, eps=1e-7)
+        delta_t = (query - prev_times)/prev_times
         check_tensor(delta_t)
-        delta_t = delta_t.unsqueeze(-1).float()
+        delta_t = delta_t.unsqueeze(-1)
+
+
+        #check_tensor(delta_t, positive=True, strict=True)
+        #delta_t = delta_t.unsqueeze(-1).float()
+        #delta_t = th.log(delta_t)
+        
         w_delta_t = self.w_t(delta_t)
         w_history = self.w_h(history_representations)
         outputs = self.activation(w_delta_t + w_history)
@@ -116,8 +127,11 @@ class THP(MCDecoder):
                                                 history_representations=history_representations,
                                                 intensity_mask=intensity_mask)
         
-        
+        self.mu.data = non_neg_param(self.mu.data)
+        check_tensor(self.mu.data, positive=True)
+        ##MODIF 
         marked_intensity = th.exp(log_marked_intensity)
+        marked_intensity = marked_intensity + self.mu
 
         ground_intensity = th.sum(marked_intensity, dim=-1)
         log_ground_intensity = th.log(ground_intensity)

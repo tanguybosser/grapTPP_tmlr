@@ -364,6 +364,7 @@ class EncDecProcess(Process):
         if low is None:
             low = times + epsilon
         if high is None:
+            #high = last_observed_time + 100   # This works because the maximum inter-event time is 10
             high = times + 10
         def one_minus_cdf(query):
             one_minus_cdf_value, cdf_mask = self.one_minus_cdf(query=query, events=past_events, prev_times=prev_times)

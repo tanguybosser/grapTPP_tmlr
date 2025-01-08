@@ -57,6 +57,7 @@ class LogNormalMixture_DD(LogNormalMixture_JD):
         
         batch_size = query.shape[0]
 
+        #Not needed here
         (query_representations,
          intensity_mask) = self.get_query_representations(
             events=events,

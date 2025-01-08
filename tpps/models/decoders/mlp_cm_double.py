@@ -9,8 +9,9 @@ from tpps.models.decoders.base.decoder import Decoder
 from tpps.models.base.process import Events
 
 
-from tpps.utils.index import take_3_by_2
-from tpps.utils.stability import check_tensor
+from tpps.utils.encoding import encoding_size
+from tpps.utils.index import take_3_by_2, take_2_by_2
+from tpps.utils.stability import epsilon, check_tensor
 
 from tpps.utils.nnplus import non_neg_param
 

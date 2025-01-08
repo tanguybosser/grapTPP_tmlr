@@ -179,7 +179,7 @@ class NeuralHawkesDecoder(MCDecoder):
 
         for t in range(query_length):
             c, new_c_bar, o_t, delta_t = self.recurrence(
-                history_representations[:, t], h_d, c_d, c_bar) 
+                history_representations[:, t], h_d, c_d, c_bar) #history embeddings are used for k_i in original model definition (normally, only mark embedding.) 
             new_c_d, new_h_d = self.decay(
                 c, new_c_bar, o_t, delta_t, query[:, t] - prev_times[:, t])
             mask = intensity_mask[:, t].unsqueeze(-1)

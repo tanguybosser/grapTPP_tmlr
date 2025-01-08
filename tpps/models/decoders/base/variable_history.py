@@ -1,6 +1,7 @@
 import abc
 
 import torch as th
+import torch.nn as nn
 
 from typing import Optional
 
@@ -59,7 +60,7 @@ class VariableHistoryDecoder(Decoder, abc.ABC):
                         "learnable_with_labels", "log_concatenate"]:
             self.embedding = MLP(
                 units=[self.emb_dim],
-                activations=None, 
+                activations=None, #Is it always set to None ? Why not relu ? 
                 constraint=self.embedding_constraint,
                 dropout_rates=0,
                 input_shape=self.marks,

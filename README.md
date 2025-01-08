@@ -1,36 +1,35 @@
-# Preventing Conflicting Gradients in Neural Marked Temporal Point Processes.
+# CNTPP Extension for Neurips
 
-This repository contains the code base to reproduce the main experiments of the paper ["Preventing Conflicting Gradients in Neural Marked Temporal Point Processes"](https://openreview.net/forum?id=INijCSPtbQ) (2024), Tanguy Bosser & Souhaib Ben Taieb, in *Transactions on Machine Learning Research (TMLR)*. 
+## Changes made since CNTPP paper.
 
-The base code is built on the implementations of ["Neural Temporal Point Processes For Modeling Electronic Health Records"](https://github.com/babylonhealth/neuralTPPs), (Enguehard et. al., 2020) and ["On the Predictive accuracy of Neural Temporal Point Process Models for Continuous-time Event Data"](https://github.com/tanguybosser/ntpp-tmlr2023), (Bosser and Ben Taieb, 2023). We thank the authors for sharing their valuable code. 
+### Datasets 
 
-## Abstract 
+- All marks have been considered for all datasets (LastFM, MOOC, Reddit, Stack Overflow), and not only the 50 most represented marks. This considerably increases the datasets sizes for LastFM and Reddit, while Stack Overflow remains untouched. 
 
-Neural Marked Temporal Point Processes (MTPP) are flexible models to capture complex temporal inter-dependencies between labeled events. These models inherently learn two predictive distributions: one for the arrival times of events and another for the types of events, also known as marks. In this study, we demonstrate that learning an MTPP model can be framed as a two-task learning problem, where both tasks share a common set of trainable parameters that are optimized jointly. Furthermore, we show that this can lead to conflicting gradients during training, where task-specific gradients are pointing in opposite directions. When such conflicts arise, following the average gradient can be detrimental to the learning of each individual tasks, resulting in overall degraded performance. To overcome this issue, we introduce novel parametrizations for neural MTPP models that allow for separate modeling and training of each task, effectively avoiding the problem of conflicting gradients. Through experiments on multiple real-world event sequence datasets, we demonstrate the benefits of our framework compared to the original model formulations.
+- For LastFM, the split proportions have been adapted to 40/10/40/10 for train/val/cal/test instead of 60/15/15/10 so that enough observations are present in the calibration set. This partially solves the problem of very high prediction regions for C-HDR-T. 
 
-## About
+### C-HDR-T 
 
-This repository allows to train and evaluate various neural TPP models following an encoder/decoder framework. The implementations of the different encoders can be found within the ```tpps/models/encoders``` folder, while the decoders are located in ```tpps/models/decoders```. For a specified combination of encoder and decoder, the computation of the negative log-likelihood and related quantities (density, intensity, cdf...) is carried out in ```tpps/models/enc_dec.py```. The train, validation and test metrics, and model checkpoints are finally stored within a directory specified by the user. See the 'Usage' section below for more details.   
+- Cumulative:
+    - Working with the CDF for inverse sampling turned out to be troublesome as it would quickly saturate at 1 due to precision issues (especially for the Poisson model), which led to too narrow prediction regions on LastFM. Working instead with 1-CDF for the bineary search alleviated the issue and led to prediction regions of correct size.   
 
-## Installation
+- Beta distribution:
+    - To sample arrival-times, we first sampled $\alpha$ from a uniform $U[0,1]$, and then performed inverse sampling using these $\alpha$'s. However, this led to some issues given that not enough points were being sampled at 'extreme' values of the distribution, i.e. near the 0-quantile and near the 0.99-quantile, which in turn led to prediction regions of too narrow size on MOOC for Poisson. Using a Beta(0.5, 0.5) allows to sample more at the extreme values of the distribution, leading to more accurate prediction regions. 
+    
+    - The Beta distribution has been employed at two stages: (1) during the sampling of the $Z$ samples, and (2) when building candidate prediction regions. While this does not cause an issue for (2), we need to check that (1) is still valid. 
 
-The experiments have been run in python 3.9 with the package versions listed in requirements.txt, which can be installed using:
+- Icrease number of samples:
+    Whenever sampling was required, the number of samples has been increased substantially, leading to more stable predictions. 
 
-```shell script
-pip install -r requirements.txt
-```
+- Removal of $\epsilon$ for $\alpha$
+    An $\epsilon = $1e^{-4}$ we added to the $\alpha's$ during the sampling of the candidate prediction regions, which forbid to sample very close to 0. Removing this term enables to reach the desired coverage guarantees (the problem was present for Poisson on LastFM). 
 
-## Usage
+### C-QR
 
-### Training a model
+- Bound switch
+    - With CQR, it sometimes occur (espcially on Stack Overflow) that the lower bounds of the prediction region becomes greater than the upper bound, due to $\hat{q}$ being large and negative. Following recommendation from the literature, I switch the lower and upper bounds whenever the situation arises. 
 
-Commands to train the different models used in our experiments can be found in the `runs` folder. According to where you want the results and checkpoints to be saved, you will need to change the "--save-results-dir" and "--save-check-dir" arguments. Additionaly, depending on where you decide to store the datasets, the "--load-from-dir" path needs to be adjusted. 
 
-To get the complete list of training arguments, run the following command:
+### C-QRL
+-  
 
-```
-python3 scripts/train.py -h
-```
-
-## Data
-The preprocessed datasets, as well as the splits divisions, can be found at [this link](https://github.com/tanguybosser/ntpp-tmlr2023). Place the 'data' folder (located within the 'processed' folder) at the top level of this repository. 

@@ -5,11 +5,13 @@ import pdb
 import numpy as np
 import torch as th
 
+#from tick.hawkes import SimuHawkes, HawkesKernelExp
 from tqdm import tqdm
 from typing import List
 
 from tpps.utils.marked_times import objects_from_events
 from tpps.utils.marked_times import pad
+from tpps.utils.record import hawkes_seq_to_record
 
 
 class MultiClassDataset:
@@ -73,7 +75,7 @@ class MultiClassDataset:
 
     def _build_sequences(self):
         if self.data is None:
-            events = self.load_data()
+            events = self.load_data() #list of sequences of events. events = dic with time and label.
         else:
             events = self.data
         if "events" in events[0]:
@@ -81,7 +83,7 @@ class MultiClassDataset:
             events = [r["events"] for r in records]
             events = [e for e in events if len(e) > 0]
 
-
+        # times, labels separately, each sorted in increasing order of time.
         raw_objects = objects_from_events(
             events=events,
             marks=self.n_processes,
@@ -138,6 +140,23 @@ class MultiClassDataset:
             with open(data_path, "r") as h:
                 records_cal = json.load(h)
                 records.extend(records_cal)
+        '''     
+        else:
+            range_size = range(self.size)
+            if self.verbose:
+                range_size = tqdm(range_size)
+
+            times_marked = [
+                generate_points(
+                    n_processes=self.n_processes,
+                    mu=self.mu,
+                    alpha=self.alpha,
+                    decay=self.decay,
+                    window=self.window,
+                    seed=self.seed + i) for i in range_size]  # D x M x Li
+
+            records = [hawkes_seq_to_record(seq) for seq in times_marked]
+        '''
         return records
 
     def build_dict_names(self, args):
@@ -172,7 +191,7 @@ class MultiClassDataset:
                                    ), 'w') as fp:
                 json.dump(names_to_codes, fp)
 
-'''
+
 def generate_points(
         n_processes,
         mu,
@@ -200,4 +219,3 @@ def generate_points(
     hawkes.track_intensity(dt)
     hawkes.simulate()
     return hawkes.timestamps
-'''

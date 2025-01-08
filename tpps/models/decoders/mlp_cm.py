@@ -86,6 +86,7 @@ class MLPCmDecoder(CumulativeDecoder):
             representations_mask: Optional[th.Tensor] = None
             ):
         
+        #query.requires_grad = True
         
         (query_representations,            
          intensity_mask) = self.get_query_representations(

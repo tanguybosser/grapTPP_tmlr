@@ -4,8 +4,11 @@ import torch as th
 
 from typing import Dict, Optional, Tuple
 
+# from tpp.processes.hawkes.r_terms import get_r_terms as get_r_terms
+# from tpp.processes.hawkes.r_terms_recursive import get_r_terms
 from tpps.processes.hawkes.r_terms_recursive_v import get_r_terms
 from tpps.utils.events import Events
+from tpps.utils.history_bst import get_prev_times, get_prev_times_sampling
 from tpps.utils.index import take_3_by_2, take_2_by_2
 
 
@@ -48,6 +51,12 @@ def decoder_fast(
 
     """
     (batch_size, t), seq_len = query.shape, events.times.shape[-1]
+    
+    
+    #((prev_times, prev_times_idxs),
+    #is_event, mask) = get_prev_times(
+    ###    query=query, events=events, allow_window=True, sampling=sampling)                  # [B,T]
+    
     
     events_labels = th.argmax(events.labels, dim=-1).long()             # [B,L] #returns the actual mark at each pos of the seq.
 
