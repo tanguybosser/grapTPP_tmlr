@@ -127,3 +127,4 @@ class THP_Double(Decoder):
         
 
         return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensity_mask, artifacts
+

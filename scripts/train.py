@@ -30,6 +30,7 @@ from tpps.utils.stability import check_tensor
 
 from tpps.utils.utils import detach, count_parameters, count_parameters_enc
 
+
 print('cuda', th.cuda.is_available(), flush=True)
 
 def get_loss(

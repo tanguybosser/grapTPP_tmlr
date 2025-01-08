@@ -14,6 +14,7 @@ from tpps.utils.stability import epsilon, check_tensor
 
 from tpps.utils.dist_utils import icdf_from_cdf
 
+
 class EncDecProcess(Process):
     """A parametric encoder decoder process.
 

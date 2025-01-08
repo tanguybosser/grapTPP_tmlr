@@ -138,3 +138,4 @@ class VariableHistoryDecoder(Decoder, abc.ABC):
             intensity_mask = intensity_mask * history_representations_mask
 
         return query_representations, intensity_mask  # [B,T,D], [B,T]
+

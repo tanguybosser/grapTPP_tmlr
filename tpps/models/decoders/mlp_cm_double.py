@@ -151,3 +151,4 @@ class FNN_Double(Decoder):
                 ground_intensity_integrals, 
                 intensity_mask,
                 artifacts)  # [B,T,M], [B,T,M], [B,T], Dict
+

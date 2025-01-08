@@ -28,6 +28,7 @@ from scripts.train import get_loss
 print('cuda', th.cuda.is_available(), flush=True)
 
 
+
 def evaluate(model: Process, args: Namespace, loader: DataLoader, test: Optional[bool] = False, eval_met: Optional[bool] =False
              ) -> Dict[str, float]:
     """Evaluate a model on a specific dataset.

@@ -172,32 +172,3 @@ class MultiClassDataset:
                                    ), 'w') as fp:
                 json.dump(names_to_codes, fp)
 
-'''
-def generate_points(
-        n_processes,
-        mu,
-        alpha,
-        decay,
-        window,
-        seed,
-        dt=0.01):
-    """
-    Generates points of an marked Hawkes processes using the tick library
-    """
-    hawkes = SimuHawkes(
-        n_nodes=n_processes,
-        end_time=window,
-        verbose=False,
-        seed=seed)
-    for i in range(n_processes):
-        for j in range(n_processes):
-            hawkes.set_kernel(
-                i=i, j=j,
-                kernel=HawkesKernelExp(
-                    intensity=alpha[i][j] / decay[i][j], decay=decay[i][j]))
-        hawkes.set_baseline(i, mu[i])
-
-    hawkes.track_intensity(dt)
-    hawkes.simulate()
-    return hawkes.timestamps
-'''

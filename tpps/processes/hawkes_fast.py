@@ -123,3 +123,4 @@ def decoder_fast(
     
     return log_ground_intensity, log_mark_pmf, ground_intensity_integral, intensities_mask, dict()
     
+    
